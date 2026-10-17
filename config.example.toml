@@ -1,0 +1,85 @@
+# Copy to config.toml and edit. Every IP below needs a FIXED DHCP lease on your router;
+# if any device's address changes after a router reboot, the whole system stops working.
+
+[server]
+host = "0.0.0.0"
+port = 8000
+title = "नानी का टीवी"
+help_text = "Vinayak ko phone karein: 98xxxxxxxx"   # shown on the tablet if the server is down
+webhook_token = ""          # set one if your smart-button gateway can include ?token=...
+debounce_s = 3.0
+
+[tv]
+ip = "192.168.1.20"
+psk = "0000"                # TV: Network > Home network > IP control > Pre-Shared Key
+mac = ""                    # optional; `python diagnose.py psk` prints it. Enables Wake-on-LAN fallback.
+hdmi_port = 2               # the port the Airtel box is plugged into
+wake_timeout_s = 60
+input_timeout_s = 25
+hdmi_settle_s = 2.0         # from `diagnose.py latency --manual`
+
+[stb]
+# adb       = Airtel Xstream (Android TV) box, ADB over LAN
+# esp32     = classic DTH box + ESP32 HTTP IR blaster (recommended for classic boxes)
+# broadlink = classic DTH box + Broadlink RM4 Mini
+# tv_cec    = no extra hardware; ONLY if `diagnose.py cec` passes
+driver = "esp32"
+ir_codes_file = "ir_codes.json"
+inter_digit_ms = 450        # from `diagnose.py digits`
+commit_wait_ms = 2500
+commit_with_ok = false
+pre_tune_keys = ["exit", "exit"]
+pre_tune_gap_ms = 600
+
+# always_on     : never send the STB power key. Turn off the box's auto-standby and hide its remote.
+# tasmota_sense : Tasmota energy plug measures the box; the power key is only pressed when the
+#                 plug proves the box is in standby, then the result is checked.
+power_strategy = "always_on"
+boot_s = 25
+cold_boot_s = 75
+off_with_tv = false
+
+[stb.esp32]
+base_url = "http://192.168.1.41"
+
+[stb.broadlink]
+host = "192.168.1.40"
+
+[stb.adb]
+host = "192.168.1.30:5555"
+adb_path = "adb"
+live_component = ""         # from `diagnose.py stb` while Airtel live TV is on screen
+live_settle_s = 3.0
+
+[stb.power_sense]
+tasmota_url = "http://192.168.1.42"
+on_threshold_w = 5.0
+
+# Favourite channels, in on-screen order. Airtel renumbers channels now and then:
+# check these against the box once a quarter. Logos go in ./logos/.
+[[channels]]
+number = "105"
+name = "आज तक"
+color = "#B71C1C"
+# logo = "aajtak.png"
+
+[[channels]]
+number = "210"
+name = "स्टार प्लस"
+color = "#0D47A1"
+
+[[channels]]
+number = "118"
+name = "डीडी नेशनल"
+color = "#1B5E20"
+
+[[channels]]
+number = "600"
+name = "आस्था"
+color = "#BF360C"
+
+# Smart buttons -> /api/button/<id>?press=single|double|long
+# Values: channel number, "off", "vol_up", "vol_down".
+[buttons]
+b1 = { single = "105", double = "210", long = "off" }
+b2 = "600"

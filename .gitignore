@@ -1,0 +1,7 @@
+config.toml
+ir_codes.json
+timings.json
+timings.tmp
+logos/
+__pycache__/
+.venv/

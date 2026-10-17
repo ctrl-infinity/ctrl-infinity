@@ -1,0 +1,72 @@
+{
+  "0": {
+    "bits": 32,
+    "code": "0x40bf0000",
+    "proto": "NEC"
+  },
+  "1": {
+    "bits": 32,
+    "code": "0x40bf0001",
+    "proto": "NEC"
+  },
+  "2": {
+    "bits": 32,
+    "code": "0x40bf0002",
+    "proto": "NEC"
+  },
+  "3": {
+    "bits": 32,
+    "code": "0x40bf0003",
+    "proto": "NEC"
+  },
+  "4": {
+    "bits": 32,
+    "code": "0x40bf0004",
+    "proto": "NEC"
+  },
+  "5": {
+    "bits": 32,
+    "code": "0x40bf0005",
+    "proto": "NEC"
+  },
+  "6": {
+    "bits": 32,
+    "code": "0x40bf0006",
+    "proto": "NEC"
+  },
+  "7": {
+    "bits": 32,
+    "code": "0x40bf0007",
+    "proto": "NEC"
+  },
+  "8": {
+    "bits": 32,
+    "code": "0x40bf0008",
+    "proto": "NEC"
+  },
+  "9": {
+    "bits": 32,
+    "code": "0x40bf0009",
+    "proto": "NEC"
+  },
+  "back": {
+    "bits": 32,
+    "code": "0x40bf000c",
+    "proto": "NEC"
+  },
+  "exit": {
+    "bits": 32,
+    "code": "0x40bf000a",
+    "proto": "NEC"
+  },
+  "ok": {
+    "bits": 32,
+    "code": "0x40bf000b",
+    "proto": "NEC"
+  },
+  "power": {
+    "bits": 32,
+    "code": "0x40bf000d",
+    "proto": "NEC"
+  }
+}

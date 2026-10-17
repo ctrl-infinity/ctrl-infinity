@@ -1,0 +1,40 @@
+# Config for fake_devices.py (the simulator). Not for the real TV.
+[server]
+port = 8000
+help_text = "simulator"
+
+[tv]
+ip = "127.0.0.1:8081"
+psk = "0000"
+hdmi_port = 2
+wake_timeout_s = 20
+hdmi_settle_s = 0.5
+poll_s = 0.3
+
+[stb]
+driver = "esp32"
+ir_codes_file = "fake_ir_codes.json"
+inter_digit_ms = 300
+commit_wait_ms = 2000
+power_strategy = "tasmota_sense"
+boot_s = 3.5
+cold_boot_s = 3
+off_with_tv = false
+
+[stb.esp32]
+base_url = "http://127.0.0.1:8081"
+
+[stb.power_sense]
+tasmota_url = "http://127.0.0.1:8081"
+on_threshold_w = 5.0
+
+[[channels]]
+number = "105"
+name = "आज तक"
+
+[[channels]]
+number = "210"
+name = "स्टार प्लस"
+
+[buttons]
+b1 = { single = "105", long = "off" }

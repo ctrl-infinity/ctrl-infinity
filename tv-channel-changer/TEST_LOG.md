@@ -25,7 +25,9 @@ Newest findings go at the bottom of each phase. The PSK is deliberately not reco
 | 4B IR blaster | Not needed unless 4C proves unreliable |
 | 5 Digit timing | **PASS**: `inter_digit_ms = 150`, 10/10 tunes, menu escape OK |
 | 6 Box power detection | Native on `atv_remote` (`is_on`, wake/sleep keys); wake from real standby untested |
-| 7-10 | Not started |
+| 7 TV latency | **PASS** with a caveat: picture takes 9-28 s after the API says ready; `hdmi_settle_s = 25`. The 30-minute cold-standby trial is still to do |
+| 8 Mismatched states | **In progress**: 1 of 5 cases passed; box sleep key has no effect, see Phase 8 |
+| 9-10 | Not started |
 
 ## Phase 0: Preparation
 
@@ -123,8 +125,40 @@ and an `atv_remote` branch in `stb`; its `AdbStb` special cases now use a `nativ
 - Menu escape: with Airtel settings open and the same connection (foreground `com.airtel.tv`, no relaunch), tuning 725 still
   landed correctly. Caveat: only the settings screen was tried; deeper menus, the guide, and an open search box are untested.
 
+## Phase 7: TV latency
+
+`diagnose.py latency --trials 3 --cool 60 --manual` (TV in standby for 60 s before each wake, Enter pressed when the picture appeared):
+
+| Trial | API `active` | API reports HDMI 1 | Picture |
+|---|---|---|---|
+| 1 | 0.1 s | 1.6 s | 19.8 s |
+| 2 | 0.1 s | 1.3 s | 28.1 s |
+| 3 | 0.6 s | 2.1 s | 9.1 s |
+
+- Warm switch (Google TV home -> HDMI 1): 3.8 s.
+- The Bravia API is optimistic: `active` and the HDMI lock come within about 2 s, but the picture appears 9-28 s later (HDCP plus the box's HDMI output). The picture lag is highly variable, so the script's median-based suggestion (18.7 s) is too tight for the slow wakes: **`hdmi_settle_s = 25`** is set instead. `wake_timeout_s = 60` is fine.
+- Because `atv_remote` reaches the box over the network, the driver is TV-independent: digits can be sent while the TV boots.
+- Not done yet: one trial with `--cool 1800` (a fully cold TV, like the first tap of the morning).
+
+## Phase 8: mismatched states (in progress)
+
+`diagnose.py mismatch --channel 725`:
+- **TV on / box on: PASS** (30.5 s; job, TV active, HDMI, box on, and eyes all OK).
+- **TV on / box off: not testable yet.** The test's setup step calls `ensure_off()`, which sends `KEYCODE_SLEEP` (223)
+  and waits up to 10 s for `is_on` to become False. It never did, so the run aborted with
+  `StbError: Xstream box did not sleep via KEYCODE_SLEEP` before any tune was attempted.
+- Follow-up probe: sending 223 alone and polling for 15 s left `is_on = True` and the connection up the whole time.
+  What the screen did was not recorded. Open question: does the box ignore the sleep key, or does it sleep while
+  `is_on` fails to track it?
+- Candidate fixes to try: `KEYCODE_SOFT_SLEEP` (276), `KEYCODE_POWER` (26, a toggle, so only safe with a reliable
+  state read), and checking what the box does on the Airtel remote's own power key. Also verify whether the box accepts
+  Remote-protocol connections and a wake key while asleep.
+- The remaining Phase 8 cases (TV on/box off, TV off/box on, TV off/box off, box stuck in a menu) are not run.
+- Side finding: `diagnose.py` crashes with a traceback when `force_stb` raises `StbError`; it should report a FAIL
+  and continue instead.
+
 **Still to do**
-1. Phase 7 latency (TV cold start), Phase 8 mismatch states, Phase 9 server/tablet/buttons, Phase 10 real-world tests.
+1. Phase 7 cold trial (`--cool 1800`, planned for the next morning), finish Phase 8, Phase 9 server/tablet/buttons, Phase 10 real-world tests.
 2. Wake the box from real standby with the `atv_remote` driver (does the Remote service still accept connections while asleep?).
 3. Check pairing survives a box reboot and a power cut (Phase 10).
 4. Record real channel numbers for the favourites (the config still has placeholders; 723 and 725 are known real channels).

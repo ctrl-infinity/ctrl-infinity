@@ -21,10 +21,11 @@ Newest findings go at the bottom of each phase. The PSK is deliberately not reco
 | 2 `diagnose.py psk` / `inputs` | **PASS** |
 | 3 CEC test | **FAIL**: digits arrive but box commits after 2 digits, whatever the timing |
 | 4A Xstream ADB | **BLOCKED**: network ADB unavailable on this firmware |
-| 4C Android TV Remote (6466/6467) | **PASS** via probe script: 723 tuned correctly. Driver not written yet |
+| 4C Android TV Remote (6466/6467) | **PASS**: `atv_remote` driver written and working on the real box |
 | 4B IR blaster | Not needed unless 4C proves unreliable |
-| 5 Digit timing | Next, on the 4C path (needs the driver) |
-| 6-10 | Not started |
+| 5 Digit timing | **PASS**: `inter_digit_ms = 150`, 10/10 tunes, menu escape OK |
+| 6 Box power detection | Native on `atv_remote` (`is_on`, wake/sleep keys); wake from real standby untested |
+| 7-10 | Not started |
 
 ## Phase 0: Preparation
 
@@ -97,12 +98,36 @@ Newest findings go at the bottom of each phase. The PSK is deliberately not reco
 - The connection reported `is_on = True`; `current_app` came back **empty** (unresolved: check what it reports while Airtel live TV is up).
 - Advantages over CEC: works with the TV off or on another input, exposes box state, no extra hardware.
 
-**Still to do on this path**
-1. Write an `atv_remote` driver in `launcher.py` (pair once, persist cert, reconnect, send digits in one connection) and extend `diagnose.py` for it.
-2. Find the minimum reliable inter-digit gap (Phase 5) and `commit_wait_ms` on this path.
-3. Work out how to return to live TV from the home screen (`send_launch_app_command` with Airtel's package/deep link) and whether `current_app` can tell us where the box is.
-4. Check pairing survives a box reboot and a power cut (Phase 10).
-5. Record real channel numbers for the favourites (the config still has placeholders).
+**Driver (done).** `AtvRemoteStb` in `launcher.py` (`driver = "atv_remote"`, section `[stb.atv_remote]`):
+pairs once with `python diagnose.py pair`, keeps one connection with auto-reconnect, sends digits with the base class's
+start-to-start pacing, reads `is_on`/`current_app`, wakes and sleeps the box with discrete keys (KEYCODE_WAKEUP/SLEEP),
+and returns to live TV by launching `live_app` when another app is in the foreground. `diagnose.py` got a `pair` command
+and an `atv_remote` branch in `stb`; its `AdbStb` special cases now use a `native_power` flag. Pairing material lives in
+`atv_cert.pem`/`atv_key.pem` next to `config.toml` (gitignored; copy them to the Pi with the config).
+
+**Results on the real box**
+- `diagnose.py stb`: connected, power ON, foreground app `com.airtel.tv` (so `live_app = "com.airtel.tv"`).
+- Home-screen bypass works: from the box's home screen the driver launched `com.airtel.tv` and tuned correctly. The box
+  replies to the launch with an "error from the device" log line, but the launch succeeds. Treat that line as noise.
+- `current_app` is empty for the first moments of a new connection; the driver then relaunches Airtel (harmless, ~4 s extra).
+  A long-lived connection (the server) knows the foreground app, so it skips the relaunch.
+
+## Phase 5 (on atv_remote)
+
+- `diagnose.py digits --channels 723 725 --gaps 100 150 200 300 450`: **all gaps passed for both channels** (the first run
+  used 726 by mistake; 726 is not a real channel, so its "no" answers were not timing).
+- Config: `inter_digit_ms = 150` (script recommendation, 1.5x the smallest reliable gap of 100 ms).
+- Reliability: 10 alternating tunes (723/725) at 150 ms landed correctly **10/10**. Each takes ~2.8 s (0.3 s keys + 2.5 s
+  `commit_wait_ms`); the channel visibly changed 1-2 s after the last digit, so `commit_wait_ms = 2500` has margin. First tune
+  of a fresh connection takes 7-8 s (connect + live-TV bring-up).
+- Menu escape: with Airtel settings open and the same connection (foreground `com.airtel.tv`, no relaunch), tuning 725 still
+  landed correctly. Caveat: only the settings screen was tried; deeper menus, the guide, and an open search box are untested.
+
+**Still to do**
+1. Phase 7 latency (TV cold start), Phase 8 mismatch states, Phase 9 server/tablet/buttons, Phase 10 real-world tests.
+2. Wake the box from real standby with the `atv_remote` driver (does the Remote service still accept connections while asleep?).
+3. Check pairing survives a box reboot and a power cut (Phase 10).
+4. Record real channel numbers for the favourites (the config still has placeholders; 723 and 725 are known real channels).
 
 ## Decision
 

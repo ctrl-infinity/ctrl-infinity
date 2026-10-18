@@ -19,8 +19,10 @@ input_timeout_s = 25
 hdmi_settle_s = 2.0         # from `diagnose.py latency --manual`
 
 [stb]
-# adb       = Airtel Xstream (Android TV) box, ADB over LAN
-# esp32     = classic DTH box + ESP32 HTTP IR blaster (recommended for classic boxes)
+# atv_remote = Airtel Xstream (Android TV) box, Android TV Remote protocol (ports 6466/6467).
+#              No ADB, no extra hardware. Pair once with `python diagnose.py pair`.
+# adb       = Airtel Xstream (Android TV) box, ADB over LAN (often locked by Airtel firmware)
+# esp32    = classic DTH box + ESP32 HTTP IR blaster (recommended for classic boxes)
 # broadlink = classic DTH box + Broadlink RM4 Mini
 # tv_cec    = no extra hardware; ONLY if `diagnose.py cec` passes
 driver = "esp32"
@@ -44,6 +46,13 @@ base_url = "http://192.168.1.41"
 
 [stb.broadlink]
 host = "192.168.1.40"
+
+[stb.atv_remote]
+host = "192.168.1.30"
+cert_file = "atv_cert.pem"  # written by `diagnose.py pair`; relative to this file; keep private
+key_file = "atv_key.pem"
+live_app = ""               # package of Airtel live TV (`diagnose.py stb` shows the foreground app)
+live_settle_s = 3.0
 
 [stb.adb]
 host = "192.168.1.30:5555"

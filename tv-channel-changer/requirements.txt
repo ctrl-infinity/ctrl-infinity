@@ -2,3 +2,5 @@ fastapi>=0.110
 uvicorn>=0.29
 httpx>=0.27
 broadlink>=0.19   # only for the Broadlink RM4 pathway
+
+androidtvremote2>=0.3     # only for the Xstream "atv_remote" driver

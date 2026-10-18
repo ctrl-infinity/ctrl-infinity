@@ -103,6 +103,18 @@ Note the current channel, press Enter, watch the TV, then answer y/n.
 5. Press Home on the box remote and run `diagnose.py stb` again. The foreground app must now be the
    launcher. This proves the home-screen bypass has something to fix.
 
+### 4C: Xstream box without ADB (Android TV Remote protocol)
+Use this when `adb connect` is refused (Airtel often locks network ADB) or `diagnose.py cec` shows digits
+being committed after two. It uses the protocol of the Google TV phone app: no hardware, no developer options.
+1. Check the ports are open: `Test-NetConnection <box-ip> -Port 6466` (and 6467) should say `True`.
+2. `pip install -r requirements.txt` (adds `androidtvremote2`), then set `driver = "atv_remote"` and
+   `[stb.atv_remote] host = "<box-ip>"`.
+3. `python diagnose.py pair`: the TV shows a code; type it in. This writes `atv_cert.pem` and `atv_key.pem`
+   next to `config.toml`. Keep them private and copy them to the Pi with the config.
+4. Put the box on Airtel live TV and run `python diagnose.py stb`. Expect PASS for connection and power
+   state; copy the foreground package (for example `com.airtel.tv`) into `live_app`.
+5. Continue with Phase 5 (digit timing).
+
 ### 4B: Classic box with ESP32 (recommended)
 1. Arduino IDE setup: Boards Manager → esp32 by Espressif, **version 2.0.17** exactly. Library
    Manager → **IRremoteESP8266**.

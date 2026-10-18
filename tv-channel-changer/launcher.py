@@ -69,18 +69,20 @@ DEFAULTS: dict[str, Any] = {
         "volume_target": "speaker",
     },
     "stb": {
-        "driver": "esp32",          # adb | broadlink | esp32 | tv_cec
+        "driver": "esp32",          # atv_remote | adb | broadlink | esp32 | tv_cec
         "ir_codes_file": "ir_codes.json",
         "inter_digit_ms": 450,      # start-to-start; calibrate with diagnose.py digits
         "commit_wait_ms": 2500,     # box's digit-entry timeout before it tunes
         "commit_with_ok": False,    # press OK after the digits instead of waiting (only if your box tunes on OK)
         "pre_tune_keys": ["exit", "exit"],  # closes menus/guide/banners; harmless on live TV
         "pre_tune_gap_ms": 600,
-        "power_strategy": "always_on",      # always_on | tasmota_sense   (adb driver always uses adb)
+        "power_strategy": "always_on",      # always_on | tasmota_sense   (adb and atv_remote have native wake/sleep)
         "boot_s": 25.0,             # wait after the box wakes from standby before it accepts digits
         "cold_boot_s": 75.0,        # wait after the smart plug restores mains power
         "off_with_tv": False,       # put the STB to sleep when the TV is turned off (needs a closed-loop power state)
         "adb": {"host": "", "adb_path": "adb", "live_component": "", "live_settle_s": 3.0},
+        "atv_remote": {"host": "", "client_name": "tvlauncher", "cert_file": "atv_cert.pem",
+                       "key_file": "atv_key.pem", "live_app": "", "live_settle_s": 3.0},
         "broadlink": {"host": ""},
         "esp32": {"base_url": ""},
         "power_sense": {"tasmota_url": "", "on_threshold_w": 5.0},
@@ -88,8 +90,9 @@ DEFAULTS: dict[str, Any] = {
     "channels": [],
     "buttons": {},
 }
-STB_DRIVERS = {"adb", "broadlink", "esp32", "tv_cec"}
-POWER_STRATEGIES = {"always_on", "tasmota_sense", "adb"}
+STB_DRIVERS = {"atv_remote", "adb", "broadlink", "esp32", "tv_cec"}
+NATIVE_POWER_DRIVERS = {"adb", "atv_remote"}  # Android boxes: discrete wake/sleep keycodes, no toggle problem
+POWER_STRATEGIES = {"always_on", "tasmota_sense", "native"}
 # White text on these colours passes WCAG AA (>= 4.5:1).
 PALETTE = ["#B71C1C", "#0D47A1", "#1B5E20", "#4A148C", "#BF360C", "#006064", "#880E4F", "#3E2723"]
 BUTTON_ACTIONS = {"off", "vol_up", "vol_down"}
@@ -115,10 +118,16 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
         raise ConfigError("[tv] ip and psk are required")
     if stb["driver"] not in STB_DRIVERS:
         raise ConfigError(f"[stb] driver must be one of {sorted(STB_DRIVERS)}")
-    if stb["driver"] == "adb":
-        stb["power_strategy"] = "adb"  # Android box: discrete wake/sleep keycodes, no toggle problem
-    if stb["power_strategy"] not in POWER_STRATEGIES or stb["power_strategy"] == "adb" and stb["driver"] != "adb":
+    if stb["driver"] in NATIVE_POWER_DRIVERS:
+        stb["power_strategy"] = "native"
+    if stb["power_strategy"] not in POWER_STRATEGIES or stb["power_strategy"] == "native" and stb["driver"] not in NATIVE_POWER_DRIVERS:
         raise ConfigError("[stb] power_strategy must be always_on or tasmota_sense for IR drivers")
+    atv = stb["atv_remote"]
+    if stb["driver"] == "atv_remote" and not atv["host"]:
+        raise ConfigError("[stb.atv_remote] host is required")
+    for k in ("cert_file", "key_file"):  # pairing material lives next to config.toml unless absolute
+        p = Path(atv[k])
+        atv[k] = str(p if p.is_absolute() else Path(cfg["_dir"]) / p)
     if stb["driver"] == "tv_cec" and stb["power_strategy"] != "always_on":
         raise ConfigError("tv_cec has no STB power key (IRCC 'Power' turns the TV off); use always_on")
     if stb["power_strategy"] == "tasmota_sense" and not stb["power_sense"]["tasmota_url"]:
@@ -346,6 +355,7 @@ class PowerSense:
 class StbDriver:
     name = "base"
     tv_independent = True  # True: can tune while the TV is still booting (the box doesn't care)
+    native_power = False   # True: the driver itself can read the box's power state and wake/sleep it
 
     def __init__(self, scfg: dict, http: httpx.AsyncClient):
         self.c = scfg
@@ -553,6 +563,7 @@ class AdbStb(StbDriver):
     """Airtel Xstream (Android TV) box over ADB-on-LAN. Gives discrete wake/sleep and a
     readable foreground app, so this pathway can see what state the box is in."""
     name = "adb"
+    native_power = True
     KEYCODES = {**{str(i): str(7 + i) for i in range(10)},  # KEYCODE_0..9 = 7..16
                 "ok": "23", "back": "4", "exit": "4", "home": "3", "power": "26",
                 "wakeup": "224", "sleep": "223"}
@@ -673,8 +684,168 @@ class AdbStb(StbDriver):
         return out
 
 
+async def pair_atv_remote(a: dict, ask_code: Callable[[], Any]) -> tuple[str, str]:
+    """One-time pairing with an Android TV box. The box shows a code on screen; `ask_code` is an
+    async callable that returns what the user read off it. Returns the box's (name, mac).
+    The client certificate written to a['cert_file'] / a['key_file'] is the credential afterwards."""
+    from androidtvremote2 import AndroidTVRemote, CannotConnect, InvalidAuth
+    remote = AndroidTVRemote(a["client_name"], a["cert_file"], a["key_file"], a["host"])
+    await remote.async_generate_cert_if_missing()
+    try:
+        name_mac = await remote.async_get_name_and_mac()
+        await remote.async_start_pairing()
+        await remote.async_finish_pairing((await ask_code()).strip())
+    except CannotConnect as e:
+        raise StbError(f"cannot reach {a['host']} on the Android TV Remote ports (6466/6467): {e}") from e
+    except InvalidAuth as e:
+        raise StbError("the box rejected the pairing code: run pairing again and type the new code") from e
+    finally:
+        remote.disconnect()
+    return name_mac
+
+
+class AtvRemoteStb(StbDriver):
+    """Airtel Xstream (Android TV) box over the Android TV Remote protocol v2 (TLS, ports
+    6466/6467: the protocol of the Google TV phone app). Keys are injected like a real remote's, so
+    Airtel's own channel-number entry receives them. HDMI-CEC digits do NOT: that path lands in a
+    system handler that commits after two digits. Needs no ADB and no extra hardware; pair once
+    with `python diagnose.py pair`. Also reports power state and the foreground app."""
+    name = "atv_remote"
+    native_power = True
+    KEYCODES = {**{str(i): 7 + i for i in range(10)},  # KEYCODE_0..9 = 7..16
+                "ok": 23, "back": 4, "exit": 4, "home": 3, "power": 26, "wakeup": 224, "sleep": 223}
+
+    def __init__(self, scfg: dict, http: httpx.AsyncClient):
+        super().__init__(scfg, http)
+        self.a = scfg["atv_remote"]
+        if not self.a["host"]:
+            raise ConfigError("[stb.atv_remote] host is required")
+        self.live_app = self.a["live_app"]
+        # BACK leaves the live-TV app on Android, so (like adb) the home-screen bypass is
+        # "bring live_app to the foreground", not blind exit keys.
+        self.pre_keys = []
+        self._remote: Any = None
+        self._available = False
+        self._conn_lock = asyncio.Lock()
+        if not self.live_app:
+            log.warning("stb.atv_remote.live_app not set: home-screen bypass disabled (run diagnose.py stb)")
+
+    def _on_available(self, available: bool) -> None:
+        self._available = available
+        log.info("Xstream box connection %s", "up" if available else "lost; reconnecting")
+
+    def _on_auth_lost(self) -> None:
+        self._available = False
+        log.error("Xstream box no longer accepts our pairing: run `python diagnose.py pair` again")
+
+    async def connect(self):
+        """Idempotent. After the first success the library reconnects by itself."""
+        from androidtvremote2 import AndroidTVRemote, CannotConnect, ConnectionClosed, InvalidAuth
+        async with self._conn_lock:
+            if self._remote is not None:
+                return self._remote
+            r = AndroidTVRemote(self.a["client_name"], self.a["cert_file"], self.a["key_file"], self.a["host"])
+            try:
+                await asyncio.wait_for(r.async_connect(), 10)
+            except InvalidAuth as e:
+                r.disconnect()
+                raise StbError("not paired with the Xstream box: run `python diagnose.py pair`") from e
+            except (CannotConnect, ConnectionClosed, TimeoutError, OSError) as e:
+                r.disconnect()
+                raise StbError(f"Xstream box {self.a['host']} (Android TV Remote): {e or type(e).__name__}") from e
+            r.add_is_available_updated_callback(self._on_available)
+            r.keep_reconnecting(self._on_auth_lost)
+            self._available = True
+            self._remote = r
+            return r
+
+    async def _wait_available(self, timeout: float = 8.0) -> None:
+        deadline = time.monotonic() + timeout
+        while not self._available:
+            if time.monotonic() > deadline:
+                raise StbError("lost the connection to the Xstream box and it did not come back")
+            await asyncio.sleep(0.2)
+
+    async def press(self, key: str) -> None:
+        from androidtvremote2 import ConnectionClosed
+        if key not in self.KEYCODES:
+            raise StbError(f"key {key!r} not available on the Xstream box")
+        r = await self.connect()
+        await self._wait_available()
+        try:
+            r.send_key_command(self.KEYCODES[key])
+        except ConnectionClosed as e:
+            raise StbError(f"Xstream box connection closed while sending {key!r}") from e
+
+    async def is_on(self) -> bool | None:
+        return (await self.connect()).is_on  # None until the box has reported its state
+
+    async def _wait_on(self, want: bool, timeout: float) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if await self.is_on() == want:
+                return True
+            await asyncio.sleep(0.5)
+        return False
+
+    async def ensure_on(self, notify: Callable[[float], None] | None = None) -> bool:
+        if await self.is_on() is not False:  # on, or unknown: never send a wake key blind
+            return False
+        if notify:
+            notify(self.c["boot_s"])
+        await self.press("wakeup")  # discrete: cannot switch the box off
+        if not await self._wait_on(True, 10):
+            raise StbError("Xstream box did not wake via KEYCODE_WAKEUP")
+        await asyncio.sleep(self.c["boot_s"])
+        return True
+
+    async def ensure_off(self) -> None:
+        if await self.is_on():
+            await self.press("sleep")
+            if not await self._wait_on(False, 10):
+                raise StbError("Xstream box did not sleep via KEYCODE_SLEEP")
+
+    async def foreground(self) -> str:
+        return (await self.connect()).current_app or ""
+
+    async def goto_live(self) -> None:
+        if not self.live_app:
+            return
+        r = await self.connect()
+        if self.live_app in await self.foreground():
+            return
+        await self._wait_available()
+        r.send_launch_app_command(self.live_app)
+        deadline = time.monotonic() + 15
+        while self.live_app not in await self.foreground():
+            if time.monotonic() > deadline:
+                raise StbError(f"live TV app {self.live_app} did not come to the foreground")
+            await asyncio.sleep(0.5)
+        await asyncio.sleep(self.a["live_settle_s"])
+
+    def estimate(self, number: str) -> float:
+        return super().estimate(number) + (self.a["live_settle_s"] if self.live_app else 0.0)
+
+    async def health(self) -> dict:
+        out: dict[str, Any] = {"driver": self.name, "host": self.a["host"], "connected": self._available}
+        try:
+            out["on"] = await self.is_on()
+            out["foreground"] = await self.foreground()
+        except Exception as e:
+            out["error"] = str(e)
+        return out
+
+    async def aclose(self) -> None:
+        if self._remote is not None:
+            self._remote.disconnect()
+            self._remote = None
+            self._available = False
+
+
 def make_stb(cfg: dict, tv: Bravia, http: httpx.AsyncClient) -> StbDriver:
     s = cfg["stb"]
+    if s["driver"] == "atv_remote":
+        return AtvRemoteStb(s, http)
     if s["driver"] == "adb":
         return AdbStb(s, http)
     if s["driver"] == "tv_cec":

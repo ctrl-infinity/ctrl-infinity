@@ -4,6 +4,7 @@ diagnose.py: run from your laptop on the same LAN as the TV. Reads the same conf
 
   python diagnose.py psk                          # Bravia PSK handshake (and proves a WRONG PSK is rejected)
   python diagnose.py inputs                       # HDMI ports, connection flags, CEC device names
+  python diagnose.py pair                         # one-time pairing with an Xstream box (atv_remote driver)
   python diagnose.py stb                          # driver reachability, IR codes, ADB focus/JVM cost, plug watts
   python diagnose.py cec --channel 105            # can the TV forward IRCC digits to the box over HDMI-CEC?
   python diagnose.py latency --trials 3 --cool 30 --manual   # standby -> active -> HDMI lock -> picture
@@ -129,9 +130,48 @@ async def t_inputs(o: L.Orchestrator) -> bool:
     return found
 
 
+async def t_pair(o: L.Orchestrator) -> bool:
+    head("Pair with the Xstream box (Android TV Remote protocol)")
+    a = o.cfg["stb"]["atv_remote"]
+    if not a["host"]:
+        bad("[stb.atv_remote] host is not set")
+        return False
+    print(f"     connecting to {a['host']}:6467. A code will appear on the TV screen.")
+
+    async def ask_code() -> str:
+        return await asyncio.to_thread(input, "  >>   type the code shown on the TV: ")
+
+    try:
+        name, mac = await L.pair_atv_remote(a, ask_code)
+    except L.StbError as e:
+        bad(str(e))
+        return False
+    ok(f"paired with {name} ({mac}); credentials saved to {a['cert_file']} / {a['key_file']}")
+    print("     keep those two files private and copy them with config.toml when you move to the Pi.")
+    return True
+
+
 async def t_stb(o: L.Orchestrator) -> bool:
     head(f"STB driver: {o.stb.name} (power: {o.cfg['stb']['power_strategy']})")
     s, passed = o.stb, True
+    if isinstance(s, L.AtvRemoteStb):
+        try:
+            await s.connect()
+            ok(f"connected to {s.a['host']} over the Android TV Remote protocol")
+        except L.StbError as e:
+            bad(str(e))
+            return False
+        await asyncio.sleep(3)  # the box reports power state and foreground app shortly after connecting
+        on = await s.is_on()
+        (ok if on is not None else warn)(f"power state: {'unknown (box has not reported yet)' if on is None else ('ON' if on else 'STANDBY')}")
+        fg = await s.foreground()
+        print(f"     foreground app: {fg or '(not reported)'}")
+        print("     -> With Airtel LIVE TV showing on the box, the package above is your [stb.atv_remote] live_app.")
+        if not s.live_app:
+            warn("live_app not set: no home-screen bypass on the Xstream box")
+        elif s.live_app not in fg:
+            warn(f"live_app {s.live_app!r} is not in the foreground now; fine if the box is not on live TV")
+        return True
     if isinstance(s, L.AdbStb):
         try:
             await s.connect()
@@ -307,7 +347,7 @@ async def t_digits(o: L.Orchestrator, channels: list[str], gaps: list[int]) -> b
 
 async def force_stb(o: L.Orchestrator, on: bool) -> str:
     s = o.stb
-    if isinstance(s, L.AdbStb) or s.sense:
+    if s.native_power or s.sense:
         await (s.ensure_on() if on else s.ensure_off())
         return "forced"
     await pause(f"Use the Airtel remote to put the box {'ON' if on else 'in STANDBY'}")
@@ -317,7 +357,7 @@ async def force_stb(o: L.Orchestrator, on: bool) -> str:
 async def t_mismatch(o: L.Orchestrator, channel: str) -> bool:
     head("Mismatched power-state recovery")
     tv, t, want = o.tv, o.cfg["tv"], target_uri(o)
-    if o.stb.sense is None and not isinstance(o.stb, L.AdbStb):
+    if o.stb.sense is None and not o.stb.native_power:
         warn("always_on strategy: the STB-off cases are EXPECTED to fail; that is the point of this test")
     matrix = []
     for tv_on, stb_on in [(True, True), (True, False), (False, True), (False, False)]:
@@ -339,7 +379,7 @@ async def t_mismatch(o: L.Orchestrator, channel: str) -> bool:
             checks["hdmi"] = await tv.playing_uri() == want
         except Exception:
             checks["tv active"] = checks["hdmi"] = False
-        st = await o.stb.is_on() if (o.stb.sense or isinstance(o.stb, L.AdbStb)) else None
+        st = await o.stb.is_on() if (o.stb.sense or o.stb.native_power) else None
         if st is not None:
             checks["stb on"] = st
         checks["eyes"] = await ask(f"Is the TV showing Airtel channel {channel}?")
@@ -361,7 +401,7 @@ async def t_mismatch(o: L.Orchestrator, channel: str) -> bool:
 async def main() -> int:
     global AUTO
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("test", choices=["psk", "inputs", "stb", "cec", "latency", "digits", "mismatch", "all"])
+    ap.add_argument("test", choices=["psk", "inputs", "pair", "stb", "cec", "latency", "digits", "mismatch", "all"])
     ap.add_argument("--channel", default=None, help="test channel number, e.g. 105")
     ap.add_argument("--channels", nargs="+", default=None, help="two channels to alternate for digits")
     ap.add_argument("--gaps", nargs="+", type=int, default=[200, 300, 450, 650])
@@ -380,6 +420,8 @@ async def main() -> int:
             return 0 if await t_psk(o) else 1
         if a.test == "inputs":
             return 0 if await t_inputs(o) else 1
+        if a.test == "pair":
+            return 0 if await t_pair(o) else 1
         if a.test == "stb":
             return 0 if await t_stb(o) else 1
         if a.test == "cec":

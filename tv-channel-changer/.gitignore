@@ -10,3 +10,5 @@ __pycache__/
 cert.pem
 key.pem
 code.txt
+atv_cert.pem
+atv_key.pem

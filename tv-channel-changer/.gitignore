@@ -5,3 +5,8 @@ timings.tmp
 logos/
 __pycache__/
 .venv/
+
+# Android TV Remote pairing material (atv_probe.py)
+cert.pem
+key.pem
+code.txt

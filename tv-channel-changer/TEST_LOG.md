@@ -21,9 +21,9 @@ Newest findings go at the bottom of each phase. The PSK is deliberately not reco
 | 2 `diagnose.py psk` / `inputs` | **PASS** |
 | 3 CEC test | **FAIL**: digits arrive but box commits after 2 digits, whatever the timing |
 | 4A Xstream ADB | **BLOCKED**: network ADB unavailable on this firmware |
-| 4C Android TV Remote (6466/6467) | Open ports found; driver not written yet |
-| 4B IR blaster | Not started (fallback) |
-| 5 Digit timing | Waiting on a working box driver |
+| 4C Android TV Remote (6466/6467) | **PASS** via probe script: 723 tuned correctly. Driver not written yet |
+| 4B IR blaster | Not needed unless 4C proves unreliable |
+| 5 Digit timing | Next, on the 4C path (needs the driver) |
 | 6-10 | Not started |
 
 ## Phase 0: Preparation
@@ -85,10 +85,27 @@ Newest findings go at the bottom of each phase. The PSK is deliberately not reco
 
 - Port scan of the box (`192.168.1.5`): **6466 and 6467 open** (Android TV Remote service v2), 8008 and 8009 open (Cast), 9000 open (unknown), 5555 closed (ADB).
 
-## Decision pending
+## Phase 4C: Android TV Remote protocol (ports 6466/6467)
 
-Box control path, after CEC and ADB failed:
-1. **Android TV Remote protocol (ports 6466/6467)**: no hardware; the box is reachable and the port is open. Needs a new driver in `launcher.py` (e.g. the `androidtvremote2` library) plus a one-time pairing code shown on the TV. Untested. Open question: does it send 3 digits without the 2-digit commit?
-2. **IR blaster** (ESP32 recommended, Broadlink RM4 Mini alternative). Most robust and uses the same keys as Nani's remote, but needs hardware and a clear IR window on the box.
+**Result: PASS. This is the working path.**
+
+- Installed `androidtvremote2` 0.3.2 into the venv. Probe script: [atv_probe.py](atv_probe.py)
+  (`python atv_probe.py pair`, write the code shown on the TV into `code.txt`, then
+  `python atv_probe.py send 7 2 3 0.3`). It stores `cert.pem`/`key.pem` next to the script (gitignored).
+- Pairing: the box (`XStream_Smart_Box_001`) showed a 6-character code on the TV; accepted first time.
+- **Sending `7`, `2`, `3` at 300 ms landed on channel 723**, with the same centered overlay (`7_`, `72_`, `723`) as the Airtel remote. The keys are injected into the foreground app, unlike CEC.
+- The connection reported `is_on = True`; `current_app` came back **empty** (unresolved: check what it reports while Airtel live TV is up).
+- Advantages over CEC: works with the TV off or on another input, exposes box state, no extra hardware.
+
+**Still to do on this path**
+1. Write an `atv_remote` driver in `launcher.py` (pair once, persist cert, reconnect, send digits in one connection) and extend `diagnose.py` for it.
+2. Find the minimum reliable inter-digit gap (Phase 5) and `commit_wait_ms` on this path.
+3. Work out how to return to live TV from the home screen (`send_launch_app_command` with Airtel's package/deep link) and whether `current_app` can tell us where the box is.
+4. Check pairing survives a box reboot and a power cut (Phase 10).
+5. Record real channel numbers for the favourites (the config still has placeholders).
+
+## Decision
+
+Box control path: **Android TV Remote protocol** (CEC failed, ADB blocked). An IR blaster (ESP32 / Broadlink RM4 Mini) remains the fallback if the pairing proves unreliable across reboots.
 
 Note: the example channel numbers (105, 210, 118, 600) are placeholders; real Aaj Tak/Star Plus/DD National/Aastha numbers on this box are still to be recorded (Phase 0 step 4).

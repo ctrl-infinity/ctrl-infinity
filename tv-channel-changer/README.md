@@ -69,7 +69,7 @@ tap / button ─► job
    │     (re-asserted every 5 s; WoL if the NIC is asleep) │   the TV is showing it, so total
    │  getPlayingContentInfo != hdmi?port=N                 │   time = max(TV boot, STB tune)
    │     ─► setPlayContent(extInput:hdmi?port=N) ─► verify  │
-   │  settle hdmi_settle_s (HDCP lock)                     │
+   │  settle hdmi_settle_s (cold) / hdmi_switch_settle_s   │
    └─ STB path ────────────────────────────────────────────┘
       ensure_on   adb: dumpsys power ─► KEYCODE_WAKEUP (discrete)
                   plug: watts < threshold ─► POWER once ─► verify watts rose ─► boot_s
@@ -202,7 +202,7 @@ For the full hands-on test plan with real devices, see [TESTING.md](TESTING.md).
 | `inputs` | target HDMI port exists; shows CEC device names; reminds you `connection` ≠ power |
 | `stb` | driver reachable; learned keys; ADB foreground app + JVM cost; plug relay/watts |
 | `cec --channel 105` | whether the TV forwards IRCC digits to the box over HDMI-CEC |
-| `latency --trials 3 --cool 30 --manual` | standby → `active` → `setPlayContent` accepted → input verified → **picture visible** (you press Enter); recommends `hdmi_settle_s` and `wake_timeout_s`; also times the warm Google TV home → HDMI switch |
+| `latency --trials 3 --cool 30 --manual` | standby → `active` → `setPlayContent` accepted → input verified → **picture visible** (you press Enter); recommends `hdmi_settle_s` and `wake_timeout_s`; also times the warm Google TV home → HDMI switch and recommends `hdmi_switch_settle_s` |
 | `digits` | inter-digit calibration |
 | `mismatch --channel 105` | runs the real job from all 4 combinations of TV on/off × STB on/off (starting on the wrong input), plus "box stuck in a menu"; checks TV power, input, measured STB power and your eyes |
 | `all --channel 105` | the lot |

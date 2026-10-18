@@ -6,7 +6,8 @@ logos/
 __pycache__/
 .venv/
 
-# Android TV Remote pairing material (atv_probe.py)
+# Android TV Remote pairing material. cert.pem/key.pem/code.txt are from the old atv_probe.py;
+# keep ignoring them so a leftover copy on someone's laptop is never committed.
 cert.pem
 key.pem
 code.txt

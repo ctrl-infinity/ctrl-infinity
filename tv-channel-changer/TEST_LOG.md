@@ -9,7 +9,7 @@ Newest findings go at the bottom of each phase. The PSK is deliberately not reco
 |---|---|
 | TV | Sony KD-49X8000H (2020 Android TV), `192.168.1.8` |
 | Box | Airtel Xstream (Android), `192.168.1.5`, plugged into HDMI 1 |
-| Test machine | Windows 11 laptop `192.168.1.14`, venv at `E:\ctrl-infinity\.tvenv`, adb at `E:\ctrl-infinity\platform-tools\adb.exe` |
+| Test machine | Windows 11 laptop `192.168.1.14`, project venv, platform-tools adb |
 | Server / tablet / blaster | not yet set up |
 
 ## Status at a glance
@@ -92,9 +92,8 @@ Newest findings go at the bottom of each phase. The PSK is deliberately not reco
 
 **Result: PASS. This is the working path.**
 
-- Installed `androidtvremote2` 0.3.2 into the venv. Probe script: [atv_probe.py](atv_probe.py)
-  (`python atv_probe.py pair`, write the code shown on the TV into `code.txt`, then
-  `python atv_probe.py send 7 2 3 0.3`). It stores `cert.pem`/`key.pem` next to the script (gitignored).
+- Installed `androidtvremote2` 0.3.2 into the venv and proved the path with a throwaway probe script
+  (`atv_probe.py`, since removed: `diagnose.py pair` and the `atv_remote` driver replace it).
 - Pairing: the box (`XStream_Smart_Box_001`) showed a 6-character code on the TV; accepted first time.
 - **Sending `7`, `2`, `3` at 300 ms landed on channel 723**, with the same centered overlay (`7_`, `72_`, `723`) as the Airtel remote. The keys are injected into the foreground app, unlike CEC.
 - The connection reported `is_on = True`; `current_app` came back **empty** (unresolved: check what it reports while Airtel live TV is up).
@@ -139,6 +138,10 @@ and an `atv_remote` branch in `stb`; its `AdbStb` special cases now use a `nativ
 - The Bravia API is optimistic: `active` and the HDMI lock come within about 2 s, but the picture appears 9-28 s later (HDCP plus the box's HDMI output). The picture lag is highly variable, so the script's median-based suggestion (18.7 s) is too tight for the slow wakes: **`hdmi_settle_s = 25`** is set instead. `wake_timeout_s = 60` is fine.
 - Because `atv_remote` reaches the box over the network, the driver is TV-independent: digits can be sent while the TV boots.
 - Not done yet: one trial with `--cool 1800` (a fully cold TV, like the first tap of the morning).
+- Follow-up fix: `hdmi_settle_s` used to apply to every input change, so a tap with the TV already on (e.g. on
+  YouTube) also waited 25 s; that is likely why the easy Phase 8 case took 30.5 s. It now applies only to cold wakes;
+  input switches on a TV that was already on use `hdmi_switch_settle_s` (default 3 s). Re-run `latency --manual`:
+  it now asks for the picture after the warm switch too and suggests a value.
 
 ## Phase 8: mismatched states (in progress)
 
@@ -154,8 +157,8 @@ and an `atv_remote` branch in `stb`; its `AdbStb` special cases now use a `nativ
   state read), and checking what the box does on the Airtel remote's own power key. Also verify whether the box accepts
   Remote-protocol connections and a wake key while asleep.
 - The remaining Phase 8 cases (TV on/box off, TV off/box on, TV off/box off, box stuck in a menu) are not run.
-- Side finding: `diagnose.py` crashes with a traceback when `force_stb` raises `StbError`; it should report a FAIL
-  and continue instead.
+- Side finding (fixed): `diagnose.py mismatch` crashed when it could not force the box's power state. It now warns and
+  asks you to set the box state with the Airtel remote, so the remaining cases can run.
 
 **Still to do**
 1. Phase 7 cold trial (`--cool 1800`, planned for the next morning), finish Phase 8, Phase 9 server/tablet/buttons, Phase 10 real-world tests.

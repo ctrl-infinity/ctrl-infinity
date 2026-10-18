@@ -304,7 +304,13 @@ async def t_latency(o: L.Orchestrator, trials: int, cool: float, manual: bool) -
     t0 = time.monotonic()
     await tv.ensure_input(t["hdmi_port"], t["input_timeout_s"], 0.2)
     warm = time.monotonic() - t0
-    print(f"     warm switch (Google TV home -> HDMI {t['hdmi_port']}): {warm:.1f}s")
+    warm_pic = None
+    if manual and not AUTO:
+        await asyncio.to_thread(input, "  >>   press Enter THE MOMENT the Airtel picture appears ")
+        warm_pic = time.monotonic() - t0
+    print(f"     warm switch (Google TV home -> HDMI {t['hdmi_port']}): API {warm:.1f}s"
+          + (f" | picture {warm_pic:.1f}s. Suggest [tv] hdmi_switch_settle_s = "
+             f"{max(0.5, warm_pic - warm + 0.5):.1f}" if warm_pic else ""))
 
     locks = [r[2] for r in rows]
     print(f"     API lock: min {min(locks):.1f}s  median {statistics.median(locks):.1f}s  max {max(locks):.1f}s")
@@ -348,8 +354,11 @@ async def t_digits(o: L.Orchestrator, channels: list[str], gaps: list[int]) -> b
 async def force_stb(o: L.Orchestrator, on: bool) -> str:
     s = o.stb
     if s.native_power or s.sense:
-        await (s.ensure_on() if on else s.ensure_off())
-        return "forced"
+        try:
+            await (s.ensure_on() if on else s.ensure_off())
+            return "forced"
+        except L.StbError as e:
+            warn(f"could not put the box {'ON' if on else 'in STANDBY'} automatically: {e}")
     await pause(f"Use the Airtel remote to put the box {'ON' if on else 'in STANDBY'}")
     return "manual"
 

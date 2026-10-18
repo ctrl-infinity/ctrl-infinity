@@ -63,7 +63,8 @@ DEFAULTS: dict[str, Any] = {
         "hdmi_port": 1,
         "wake_timeout_s": 60.0,
         "input_timeout_s": 25.0,
-        "hdmi_settle_s": 2.0,       # HDCP/picture lock after the API reports the input; calibrate with diagnose.py latency
+        "hdmi_settle_s": 2.0,       # picture lock after a COLD wake (TV was in standby); calibrate with diagnose.py latency
+        "hdmi_switch_settle_s": 3.0,  # picture lock after switching input on a TV that was already on
         "poll_s": 0.7,
         "http_timeout_s": 3.0,
         "volume_target": "speaker",
@@ -1011,9 +1012,11 @@ class Orchestrator:
         await self.tv.ensure_on(t["wake_timeout_s"], t["poll_s"])
         job.tv = "input"
         changed = await self.tv.ensure_input(t["hdmi_port"], t["input_timeout_s"], t["poll_s"])
-        if changed or cold:
+        if cold or changed:
+            # A cold wake waits for the slow first HDCP/picture lock; an input switch on a TV that
+            # was already on only needs a short one.
             job.tv = "settle"
-            await asyncio.sleep(t["hdmi_settle_s"])
+            await asyncio.sleep(t["hdmi_settle_s"] if cold else t["hdmi_switch_settle_s"])
         job.tv = "ok"
         self.timings.record("tv_cold" if cold else "tv_warm", time.monotonic() - t0)
 

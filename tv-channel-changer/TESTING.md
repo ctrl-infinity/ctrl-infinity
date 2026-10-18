@@ -191,7 +191,8 @@ python diagnose.py digits --channels 105 210 --gaps 150 250 350 450 650
 python diagnose.py latency --trials 3 --cool 60 --manual
 ```
 Press Enter **the instant the Airtel picture appears**.
-- Put the suggested `hdmi_settle_s` into the config, and raise `wake_timeout_s` if it warns.
+- Put the suggested `hdmi_settle_s` (cold wake) and `hdmi_switch_settle_s` (input switch on a TV
+  that was already on) into the config, and raise `wake_timeout_s` if it warns.
 - Then run one trial with `--cool 1800`, i.e. 30 minutes of standby. A fully cold TV can take much
   longer than one that just went to standby, and that is what Nani will hit every morning.
 

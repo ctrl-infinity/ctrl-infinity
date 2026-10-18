@@ -16,7 +16,8 @@ mac = ""                    # optional; `python diagnose.py psk` prints it. Enab
 hdmi_port = 2               # the port the Airtel box is plugged into
 wake_timeout_s = 60
 input_timeout_s = 25
-hdmi_settle_s = 2.0         # from `diagnose.py latency --manual`
+hdmi_settle_s = 2.0         # after a cold wake; from `diagnose.py latency --manual`
+hdmi_switch_settle_s = 3.0  # after an input switch on a TV that was already on; same test
 
 [stb]
 # atv_remote = Airtel Xstream (Android TV) box, Android TV Remote protocol (ports 6466/6467).

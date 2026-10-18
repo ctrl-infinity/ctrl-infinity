@@ -1,3 +1,4 @@
+# sudo cp -r ctrl-infinity/tv-channel-changer /opt/tvlauncher  (then create /opt/tvlauncher/.venv)
 # sudo cp tvlauncher.service /etc/systemd/system/ && sudo systemctl enable --now tvlauncher
 [Unit]
 Description=One-tap TV launcher

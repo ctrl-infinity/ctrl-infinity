@@ -17,7 +17,8 @@ Nothing needs the internet.
 | `learn_ir.py` | Captures your Airtel remote's codes into `ir_codes.json` (Broadlink or ESP32) |
 | `esp32_ir_blaster/esp32_ir_blaster.ino` | HTTP IR blaster firmware |
 | `fake_devices.py` + `fake_config.toml` | Simulated TV + box + plug, so you can work without the real TV |
-| `tvlauncher.service` | systemd unit |
+| `tvlauncher.service` | systemd unit (expects this folder copied to `/opt/tvlauncher`) |
+| `TESTING.md` | Step-by-step test plan for the real TV, box and tablet |
 
 ## Read this first: where the plan is weak
 
@@ -90,6 +91,7 @@ tap / button ─► job
 Any always-on Linux box on the LAN: a Raspberry Pi 3/4/5, an old laptop, or an old Android phone
 running Termux.
 ```bash
+git clone https://github.com/ctrl-infinity/ctrl-infinity && cd ctrl-infinity/tv-channel-changer
 sudo apt install python3-venv android-tools-adb      # adb only for the Xstream pathway
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp config.example.toml config.toml                   # edit IPs, PSK, HDMI port, channels
@@ -192,7 +194,7 @@ curl -s localhost:8000/api/health | python -m json.tool
 ```
 
 ## Verification suite (`diagnose.py`)
-Run these in order, from your laptop, sitting in front of the TV:
+For the full hands-on test plan with real devices, see [TESTING.md](TESTING.md). Run these in order, from your laptop, sitting in front of the TV:
 
 | Command | Proves |
 |---|---|

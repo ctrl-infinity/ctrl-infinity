@@ -1258,51 +1258,68 @@ INDEX_HTML = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#0b0c0e">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg">
 <title>__TITLE__</title>
 <style>
-  :root { --gap: clamp(10px, 2vw, 20px); }
+  :root { --gap: clamp(12px, 2.2vw, 22px); --ink: #fff; --ink-soft: rgba(255,255,255,.82);
+    --surface: #1b1d21; --edge: rgba(255,255,255,.22); --focus: #ffd600;
+    --ease: cubic-bezier(.16, 1, .3, 1); }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; height: 100%; background: #000; color: #fff;
+  html, body { margin: 0; height: 100%; background: #0b0c0e; color: var(--ink);
     font-family: system-ui, "Noto Sans Devanagari", "Noto Sans", Roboto, sans-serif;
     -webkit-user-select: none; user-select: none; overscroll-behavior: none; touch-action: manipulation; }
   body { display: flex; flex-direction: column; gap: var(--gap); padding: var(--gap);
     padding-bottom: max(var(--gap), env(safe-area-inset-bottom)); }
-  #grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: var(--gap);
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); grid-auto-rows: minmax(160px, 1fr); }
-  button { font-family: inherit; color: #fff; cursor: pointer; }
-  .card { border: 6px solid #fff; border-radius: 28px; padding: 12px; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 10px; text-align: center; box-shadow: 0 8px 0 #444; }
-  .card:active, #bar button:active { transform: translateY(6px); box-shadow: 0 2px 0 #444; filter: brightness(1.3); }
-  .card img { max-height: 45%; max-width: 80%; object-fit: contain; background: #fff; border-radius: 16px; padding: 6px; }
-  .name { font-size: clamp(30px, 6vw, 64px); font-weight: 800; line-height: 1.1; }
-  .num { font-size: clamp(22px, 4vw, 40px); font-weight: 700; letter-spacing: .08em; opacity: .9; }
+  ::selection { background: var(--focus); color: #000; }
+  #grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: var(--gap); padding: 4px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); grid-auto-rows: minmax(160px, 1fr);
+    scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+  button { font-family: inherit; color: var(--ink); cursor: pointer; border: 0;
+    transition: transform .18s var(--ease), box-shadow .18s var(--ease), filter .18s var(--ease); }
+  button:focus-visible { outline: 4px solid var(--focus); outline-offset: 4px; }
+  .card { border-radius: 28px; padding: 14px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px; text-align: center;
+    box-shadow: inset 0 0 0 3px var(--edge), 0 10px 24px rgba(0,0,0,.55), 0 2px 4px rgba(0,0,0,.6); }
+  .card:active, #bar button:active { transform: scale(.97); filter: brightness(1.25);
+    box-shadow: inset 0 0 0 3px var(--edge), 0 3px 8px rgba(0,0,0,.6); }
+  @media (hover: hover) { .card:hover, #bar button:hover { filter: brightness(1.12); } }
+  .card img { max-height: 45%; max-width: 80%; object-fit: contain; background: #fff; border-radius: 16px; padding: 8px; }
+  .name { font-size: clamp(30px, 6vw, 64px); font-weight: 800; line-height: 1.1; text-wrap: balance; }
+  .num { font-size: clamp(22px, 4vw, 40px); font-weight: 700; letter-spacing: .08em; color: var(--ink-soft);
+    font-variant-numeric: tabular-nums; }
   #bar { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: var(--gap); }
-  #bar button { min-height: 110px; border-radius: 24px; border: 5px solid #fff; background: #212121;
-    font-size: clamp(26px, 5vw, 48px); font-weight: 800; box-shadow: 0 8px 0 #444; }
-  #bar #off { background: #5d0000; }
+  #bar button { min-height: 110px; border-radius: 24px; background: var(--surface);
+    font-size: clamp(26px, 5vw, 48px); font-weight: 800; display: flex; align-items: center;
+    justify-content: center; gap: .35em; box-shadow: inset 0 0 0 3px var(--edge), 0 8px 18px rgba(0,0,0,.5); }
+  #bar button svg { width: 1.1em; height: 1.1em; flex: none; fill: none; stroke: currentColor;
+    stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  #bar #off { background: #7a1414; }
   #ov { position: fixed; inset: 0; z-index: 10; display: none; flex-direction: column; align-items: center;
     justify-content: center; gap: 2vh; padding: 4vw; text-align: center; }
-  #ov.show { display: flex; }
-  #ov-name { font-size: clamp(40px, 9vw, 110px); font-weight: 900; }
+  #ov.show { display: flex; animation: rise .35s var(--ease); }
+  @keyframes rise { from { opacity: 0; transform: scale(1.03); } }
+  #ov-name { font-size: clamp(40px, 9vw, 110px); font-weight: 900; line-height: 1.05; text-wrap: balance; }
   #ov-count { font-size: clamp(120px, 34vh, 360px); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
   .row { font-size: clamp(26px, 5vw, 52px); font-weight: 700; min-height: 1.2em; }
-  #ov-tech { font-size: 15px; opacity: .75; max-width: 90vw; word-break: break-word; }
-  #down { position: fixed; inset: 0; z-index: 20; background: #7f0000; display: none; flex-direction: column;
+  #ov-tech { font-size: 16px; color: var(--ink-soft); max-width: 90vw; word-break: break-word; }
+  #down { position: fixed; inset: 0; z-index: 20; background: #7a1414; display: none; flex-direction: column;
     align-items: center; justify-content: center; text-align: center; padding: 6vw; gap: 3vh; }
   #down.show { display: flex; }
-  #down div { font-size: clamp(30px, 7vw, 72px); font-weight: 900; }
+  #down div { font-size: clamp(30px, 7vw, 72px); font-weight: 900; line-height: 1.15; text-wrap: balance; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
-<main id="grid"></main>
-<nav id="bar">
-  <button id="off">टीवी बंद</button>
-  <button id="vdown" aria-label="आवाज़ कम">🔉 −</button>
-  <button id="vup" aria-label="आवाज़ ज़्यादा">🔊 +</button>
+<main id="grid" aria-label="चैनल"></main>
+<nav id="bar" aria-label="टीवी नियंत्रण">
+  <button id="off"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 6.9a8 8 0 1 0 11.4 0"/></svg>टीवी बंद</button>
+  <button id="vdown" aria-label="आवाज़ कम"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5zM16 9.5a3.5 3.5 0 0 1 0 5"/></svg>−</button>
+  <button id="vup" aria-label="आवाज़ ज़्यादा"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5v5h3.5L11 18.5v-13L6.5 9.5zM15 9.5a3.5 3.5 0 0 1 0 5M17.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>+</button>
 </nav>
 <section id="ov" role="status" aria-live="polite">
   <div id="ov-name"></div>
@@ -1311,7 +1328,7 @@ INDEX_HTML = """<!doctype html>
   <div class="row" id="ov-stb"></div>
   <div id="ov-tech"></div>
 </section>
-<section id="down"><div>सर्वर से संपर्क नहीं</div><div id="help"></div></section>
+<section id="down" role="alert"><div>सर्वर से संपर्क नहीं</div><div id="help"></div></section>
 <script>
 const CFG = __CFG__;
 const T = {
@@ -1347,7 +1364,7 @@ function render() {
   $('help').textContent = CFG.help || '';
   for (const ch of CFG.channels) {
     const b = document.createElement('button');
-    b.className = 'card'; b.style.background = ch.color;
+    b.className = 'card'; b.style.background = ch.color; b.setAttribute('aria-label', ch.name + ', ' + ch.number);
     if (ch.logo) { const i = document.createElement('img'); i.src = ch.logo; i.alt = ''; b.appendChild(i); }
     const n = document.createElement('div'); n.className = 'name'; n.textContent = ch.name; b.appendChild(n);
     const d = document.createElement('div'); d.className = 'num'; d.textContent = ch.number; b.appendChild(d);

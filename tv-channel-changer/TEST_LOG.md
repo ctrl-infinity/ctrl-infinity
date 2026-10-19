@@ -267,6 +267,20 @@ the webhook), Fully Kiosk Browser specifically, and a true silent-drop network f
 | Router reboot | Not yet; check that no device changes IP (reserve TV, box and laptop in the router) |
 | Watch Nani (no explanation beyond "press the picture") | Not yet; needs the real channel names and logos on the cards first |
 
+### Kiosk page restyle (separate session) and logos
+
+- Real logos now sit on the cards (`logo = ...` in the gitignored `config.toml`, files in the gitignored `logos/`): News18 Bangla
+  as an SVG (about 2.5 KB, inspected: paths only, no scripts) and Zee 24 Ghanta as a PNG trimmed from 6667x4167 to 875x307
+  (36 KB; the original was 258 KB and 28 megapixels, heavy to decode on a phone). The card for 723 is named "Zee 24 Ghanta".
+- A separate polish session restyled the page (CSS and markup only, no logic): inline SVG icons instead of emoji, softer card
+  edges, a visible focus ring, `text-wrap: balance`, `prefers-reduced-motion`, ARIA labels, and `role="alert"` on the
+  server-down screen. Reviewed on a phone-sized view: text contrast 6.6:1 to 16.9:1 (AA needs 4.5:1), bar buttons 110 px
+  tall, cards 343 x 323 px, no horizontal scroll, both logos load. The cold-start overlay settles to a solid screen after a
+  0.35 s fade (the fade briefly shows the cards through it).
+- Decision: the restyle had dropped `maximum-scale=1, user-scalable=no` from the viewport meta, which let a pinch gesture zoom
+  the page. An accidental pinch could leave Nani with a zoomed page and no obvious way back, so the lock is restored.
+  (The phone's own accessibility zoom can still override it.)
+
 ## Edge cases register (revisit later)
 
 Things seen or suspected during testing that are not blocking the happy path. Status: **fixed**, **open**, or **watch**.
@@ -295,6 +309,8 @@ Things seen or suspected during testing that are not blocking the happy path. St
 | 20 | Pi / systemd, real tablet in Fully Kiosk, real Shelly button, unplugging the Pi | open | Phase 9 on real hardware |
 | 21 | Picture appears quickly after a short standby (countdown still near 20) but the fixed 25 s cold settle keeps counting | open | Adaptive settle idea: scale `hdmi_settle_s` by how long the TV was in standby |
 | 22 | Page request timeout never exercised against a silently dropped network | open | Needs the Pi unplug test |
+| 23 | For a few seconds after the TV is turned off, its API answers 404 on `/sony/system`; `/api/health` then shows an error instead of `standby` | watch | A cold tap during that window still succeeded (27.2 s), so the job tolerates it. Cosmetic in health |
+| 24 | Restyle dropped the pinch-zoom lock from the viewport meta | fixed | Lock restored (`maximum-scale=1, user-scalable=no`); OS-level accessibility zoom still works |
 
 **Still to do**
 1. Phase 7 cold trial (`--cool 1800`, planned for the next morning), finish Phase 8, Phase 9 server/tablet/buttons, Phase 10 real-world tests.

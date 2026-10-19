@@ -28,7 +28,7 @@ Newest findings go at the bottom of each phase. The PSK is deliberately not reco
 | 7 TV latency | **PASS** with a caveat: picture takes 9-28 s after the API says ready; `hdmi_settle_s = 25`. The 30-minute cold-standby trial is still to do |
 | 8 Mismatched states | **PASS** (4 of 5 cases in the full run, case 1 passed on re-run): box power via POWER key, see Phase 8 |
 | 9 Server, tablet, buttons | **PASS** on the laptop plus a real phone over Wi-Fi (cards, off, tunes, haptics, down screen, recovery); Pi/systemd and a real Shelly button untested |
-| 10 Real-world tests | Not started |
+| 10 Real-world tests | **In progress**: 2 of 7 done (Nani's own remote, wrong channel by hand); morning cold start, power cut, router reboot, rapid taps on a button, and the Nani test remain |
 
 ## Phase 0: Preparation
 
@@ -248,8 +248,24 @@ files), the real tablet in Fully Kiosk Browser (wake lock, vibration), a real Sh
   idempotent). Re-test: one tap worked.
 - The recovery from the red screen needs no reload.
 
+**Decision:** the phone is the control surface for now (always at hand, no kiosk setup). The Pi / systemd, a dedicated tablet in
+Fully Kiosk Browser and a Shelly button are deferred, not dropped. While the server runs on a laptop, that laptop has to stay on
+and awake and keep the same LAN address (reserve it in the router).
+
 **Not tested:** the Raspberry Pi (systemd unit, boot without login, unplug and replug), a real Shelly button (only curl against
 the webhook), Fully Kiosk Browser specifically, and a true silent-drop network failure.
+
+## Phase 10: real-world tests (in progress; phone as the control surface)
+
+| Test | Result |
+|---|---|
+| Nani's own remote (Sony remote to YouTube, then tap 725 on the phone) | **PASS**: back on Airtel and on 725 in a couple of seconds (server: job done in 6.1 s, no failure), no odd flashes beyond the expected ones |
+| Wrong channel by hand (Airtel remote, then tap a card), both directions | **PASS**: landed on the tapped channel first time |
+| Rapid taps | Covered by the HTTP tests in Phase 9 (same card joins one job; a different card wins after the old entry commits). The phone page also blocks a second tap while a job is showing |
+| Morning cold start | Not yet: needs the TV off all night (also covers the 30-minute cold trial) |
+| Power cut (mains off for the whole setup, back on after 1 minute) | Not yet; with the server on a laptop this tests the laptop restarting the server by itself, which it will not unless it is set up to |
+| Router reboot | Not yet; check that no device changes IP (reserve TV, box and laptop in the router) |
+| Watch Nani (no explanation beyond "press the picture") | Not yet; needs the real channel names and logos on the cards first |
 
 ## Edge cases register (revisit later)
 

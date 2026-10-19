@@ -813,16 +813,33 @@ class AtvRemoteStb(StbDriver):
         if not self.live_app:
             return
         r = await self.connect()
+        # A fresh connection reports the foreground app only after a moment. Deciding on the empty
+        # value would needlessly leave a live channel that is already on screen.
+        deadline = time.monotonic() + 4
+        while not await self.foreground() and time.monotonic() < deadline:
+            await asyncio.sleep(0.25)
         if self.live_app in await self.foreground():
             return
         await self._wait_available()
-        r.send_launch_app_command(self.live_app)
-        deadline = time.monotonic() + 15
-        while self.live_app not in await self.foreground():
-            if time.monotonic() > deadline:
-                raise StbError(f"live TV app {self.live_app} did not come to the foreground")
-            await asyncio.sleep(0.5)
-        await asyncio.sleep(self.a["live_settle_s"])
+        # A launch request alone is ignored while some apps are up (measured: the Settings /
+        # Developer options screen swallowed it for 20 s), but works from the home screen. So go
+        # HOME first, launch, and retry once.
+        for attempt in (1, 2):
+            r.send_key_command(self.KEYCODES["home"])
+            await asyncio.sleep(1.0)
+            r.send_launch_app_command(self.live_app)
+            deadline = time.monotonic() + 8
+            while self.live_app not in await self.foreground():
+                if time.monotonic() > deadline:
+                    break
+                await asyncio.sleep(0.25)
+            else:
+                await asyncio.sleep(self.a["live_settle_s"])
+                return
+            log.warning("live TV app %s not in the foreground after launch attempt %d (foreground: %r)",
+                        self.live_app, attempt, await self.foreground())
+        raise StbError(f"live TV app {self.live_app} did not come to the foreground "
+                       f"(box is showing {await self.foreground() or 'an unknown app'})")
 
     def estimate(self, number: str) -> float:
         return super().estimate(number) + (self.a["live_settle_s"] if self.live_app else 0.0)

@@ -160,6 +160,49 @@ and an `atv_remote` branch in `stb`; its `AdbStb` special cases now use a `nativ
 - Side finding (fixed): `diagnose.py mismatch` crashed when it could not force the box's power state. It now warns and
   asks you to set the box state with the Airtel remote, so the remaining cases can run.
 
+## Cold start via the real job (TV in standby for hours, box left on a Settings screen)
+
+Ran the actual launcher job for channel 725 without touching the TV first (TV reported `standby`; ICMP ping gets no
+reply in this state but the REST API still answers, so network wake works).
+
+| Time | Event |
+|---|---|
+| 0.6 s | TV waking, box waking |
+| 1.7 s | TV input switch to HDMI 1 |
+| 4.3 s | TV in the 25 s cold settle |
+| ~16 s | **Box side failed**: `live TV app com.airtel.tv did not come to the foreground` (15 s wait) |
+| 29.3 s | Job reported failed (waited for the TV settle to finish) |
+
+- The TV half behaved. The failure was the box: its foreground app was `com.android.tv.settings` and the
+  `send_launch_app_command` request for Airtel was ignored for a full 20 s (probe), so no digits were sent.
+- Same request works from the home screen. **Home key, then launch** put Airtel in the foreground in about 1 s.
+  `AtvRemoteStb.goto_live` now does that (Home, 1 s, launch, up to 8 s wait, one retry). The probe confirmed Home+launch
+  by hand; the new `goto_live` was confirmed to be a no-op when Airtel is already in front, but its Settings-escape path
+  has not been re-run end to end yet.
+- Fresh connections report an empty foreground app for the first moments; `goto_live` now waits up to 4 s for a value
+  instead of deciding on the empty string (previously it relaunched Airtel needlessly).
+- Not captured: the picture time for this cold wake (the job failed before the Enter was used). The planned 30-minute
+  cold trial still stands.
+
+## Edge cases register (revisit later)
+
+Things seen or suspected during testing that are not blocking the happy path. Status: **fixed**, **open**, or **watch**.
+
+| # | Edge case | Status | Notes |
+|---|---|---|---|
+| 1 | Box left on a Settings screen; Airtel launch request is ignored | fixed (partly verified) | Home, then launch. Re-test the full `goto_live` from Settings |
+| 2 | Airtel app cold-starts after launch (loading screen seen); foreground flips to `com.airtel.tv` immediately but the UI may still be loading | open | `live_settle_s = 3` may be too short; digits could land on the loading screen. Measure the load time, then tune `live_settle_s` |
+| 3 | Fresh connection reports no foreground app for the first moments | fixed | `goto_live` waits up to 4 s |
+| 4 | Box ignores `KEYCODE_SLEEP` (223); `is_on` never changes | open | Blocks Phase 8 box-off cases. Try 276 (SOFT_SLEEP) and 26 (POWER); watch the screen |
+| 5 | Does the box accept connections and a wake key while truly asleep? | open | Untested; matters for `ensure_on` |
+| 6 | TV wakes onto whatever screen it was last on (once a Developer options screen) before the HDMI switch | watch | Harmless if `setPlayContent` always follows; seen once |
+| 7 | Launch request makes the box send an "error from the device" log line even when the launch works | watch | Cosmetic; consider silencing the library logger |
+| 8 | Menu escape only tested for the Airtel settings screen | open | Guide, search box and deeper menus untested |
+| 9 | Pairing survival across a box reboot or power cut | open | Phase 10 |
+| 10 | Job takes up to the full TV cold settle (25 s) to report failure even when the box failed at about 16 s | watch | Consider failing fast, or showing the box error sooner |
+| 11 | HDMI 2 is labelled "TV box" and shows connected; unknown device | watch | Not used; confirm what it is |
+| 12 | Cold-start picture time after a long standby | open | Planned 30-minute trial (`latency --trials 1 --cool 1800 --manual`) |
+
 **Still to do**
 1. Phase 7 cold trial (`--cool 1800`, planned for the next morning), finish Phase 8, Phase 9 server/tablet/buttons, Phase 10 real-world tests.
 2. Wake the box from real standby with the `atv_remote` driver (does the Remote service still accept connections while asleep?).

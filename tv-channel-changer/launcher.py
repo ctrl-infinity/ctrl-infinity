@@ -432,10 +432,19 @@ class StbDriver:
             await self._paced(self.pre_keys, self.pre_gap)
             await asyncio.sleep(self.pre_gap)
 
+    _commit_until = 0.0  # monotonic time at which the digits sent last will have been committed by the box
+
     async def select_channel(self, number: str) -> None:
         async with self._lock:
+            # A superseded job is cancelled while it sits in commit_wait, but its digits are already on
+            # the box. Typing a new number into a box that is still committing the old one is ignored
+            # (measured: tap 725, then 723 0.5 s later, left the box on 725). Let the old entry finish.
+            wait = self._commit_until - time.monotonic()
+            if wait > 0:
+                await asyncio.sleep(wait)
             await self.goto_live()
             await self._paced(list(number) + (["ok"] if self.c["commit_with_ok"] else []), self.gap)
+            self._commit_until = time.monotonic() + self.commit_wait
             await asyncio.sleep(self.commit_wait)
 
     def estimate(self, number: str) -> float:

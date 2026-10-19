@@ -27,7 +27,8 @@ Newest findings go at the bottom of each phase. The PSK is deliberately not reco
 | 6 Box power detection | Native on `atv_remote` (`is_on`, wake/sleep keys); wake from real standby untested |
 | 7 TV latency | **PASS** with a caveat: picture takes 9-28 s after the API says ready; `hdmi_settle_s = 25`. The 30-minute cold-standby trial is still to do |
 | 8 Mismatched states | **PASS** (4 of 5 cases in the full run, case 1 passed on re-run): box power via POWER key, see Phase 8 |
-| 9-10 | Not started |
+| 9 Server, tablet, buttons | **PASS on the laptop** (server, HTTP tunes, off, rapid taps, UI, buttons, down screen); Pi/systemd, real tablet and real buttons untested |
+| 10 Real-world tests | Not started |
 
 ## Phase 0: Preparation
 
@@ -198,6 +199,33 @@ reply in this state but the REST API still answers, so network wake works).
 - Not captured: the picture time for this cold wake (the job failed before the Enter was used). The planned 30-minute
   cold trial still stands.
 
+## Phase 9: server, tablet, buttons (run on the Windows laptop, tablet UI in the built-in browser)
+
+- Server: `python launcher.py` starts with the `atv_remote` driver. `GET /api/health` reports TV `active` on HDMI 1, the
+  box on, and the learned timings (`tv_cold` / `tv_warm`) that feed the countdown.
+- `POST /api/tune/723`: job done in 2.8 s (0.3 s of keys plus the 2.5 s commit wait) with the TV already on.
+- `POST /api/off`: done in 0.1 s; TV went to standby, box left on (`off_with_tv = false`).
+- **Rapid taps:** the same card twice, 2 s apart, returned the same job id (one job, no garbled digits).
+- **Bug found and fixed: a different card tapped mid-job did not win.** 725 then 723 0.5 s later left the box on 725:
+  the cancelled 725 job had already typed its digits and was only waiting out `commit_wait`, and the box ignored the
+  digits typed into its commit window. `StbDriver.select_channel` now waits out the previous entry's commit window
+  (`_commit_until`) before typing, so the last tap wins; re-test gave 723 (job 5.1 s instead of 2.8 s). The ADB driver has its
+  own `select_channel` and does not have this guard.
+- Tablet UI (768 px wide emulation): four large cards, "TV बंद" and volume buttons render legibly. Config now has
+  two real cards, 723 and 725 (names are placeholders until the real channel names are known).
+- Tablet tap from TV standby (723): countdown started at 23 s, status lines "टीवी तैयार हो रहा है…" and "चैनल ✓" appeared
+  separately, the page returned to the cards on its own. The job took 30.7 s; the **picture was visible at about 21 s**
+  (when the countdown showed 1), so the 25 s cold settle ran about 9 s longer than needed this time. The countdown then sat
+  on "1" for about 9 s. The learned `tv_cold` moved from 22.1 s to 24.7 s, which will make the next countdown closer.
+- Smart button webhook (GET): `b2` single mapped to 725 with source `button:b2:single`; the same press 0.4 s later returned the
+  same job id (bounce handled); an unknown button and an unmapped press return 404. A **cold** button press showed on the
+  tablet (red 725 card with a countdown); warm presses finish between the page's 3 s heartbeats so are not shown, which is fine.
+- Server-down screen: with the server stopped, the page showed the dark red "सर्वर से संपर्क नहीं" screen with the help line
+  after about 18 s (TESTING.md says about 10 s); it cleared by itself a few seconds after the server returned.
+
+**Not tested here:** the Raspberry Pi install (systemd unit, boot without login, copying `config.toml` and the two pem
+files), the real tablet in Fully Kiosk Browser (wake lock, vibration), a real Shelly button, and unplugging the Pi.
+
 ## Edge cases register (revisit later)
 
 Things seen or suspected during testing that are not blocking the happy path. Status: **fixed**, **open**, or **watch**.
@@ -218,6 +246,12 @@ Things seen or suspected during testing that are not blocking the happy path. St
 | 12 | Cold-start picture time after a long standby | open | Planned 30-minute trial (`latency --trials 1 --cool 1800 --manual`) |
 | 13 | Mismatch case 1 (TV on / box on) failed once in the full run, passed alone | watch | Possible TV no-signal auto-standby after the box was asleep; re-run the full mismatch to see if it recurs |
 | 14 | Box ignores POWER for a few seconds after a power change | watch | Driver waits 15 s between power changes; the real window is between 1 s and 22 s and could be narrowed |
+| 15 | Countdown starts at the cold estimate (about 22 s) and drops when the TV turns out to be on; on cold wakes it can sit on "1" for several seconds while the settle finishes | watch | Improves with the learned timings; consider ending the countdown on the picture estimate |
+| 16 | `/api/health` shows `connected: false` on the first call even though `on` is true (the key is built before the first `is_on` opens the connection) | open | Cosmetic; reorder in `AtvRemoteStb.health` |
+| 17 | Server-down screen appears after about 18 s, not about 10 s | watch | 3 s heartbeat, 3 misses, plus request timeouts |
+| 18 | Placeholder help-line phone number and placeholder card names (channel numbers) | open | Fill in the real number and channel names |
+| 19 | `hdmi_settle_s = 25` was longer than the picture needed on one cold wake (picture at about 21 s, job end 30.7 s) | watch | Wait for the 30-minute cold trial and more samples before shortening |
+| 20 | Pi / systemd, real tablet in Fully Kiosk, real Shelly button, unplugging the Pi | open | Phase 9 on real hardware |
 
 **Still to do**
 1. Phase 7 cold trial (`--cool 1800`, planned for the next morning), finish Phase 8, Phase 9 server/tablet/buttons, Phase 10 real-world tests.

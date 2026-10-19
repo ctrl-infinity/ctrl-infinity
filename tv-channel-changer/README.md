@@ -19,6 +19,7 @@ Nothing needs the internet.
 | `fake_devices.py` + `fake_config.toml` | Simulated TV + box + plug, so you can work without the real TV |
 | `tvlauncher.service` | systemd unit (expects this folder copied to `/opt/tvlauncher`) |
 | `TESTING.md` | Step-by-step test plan for the real TV, box and tablet |
+| `phone_proof.py` + `PHONE_PROOF.md` | Runs the launcher on the phone itself (Termux, no FastAPI) to prove phone-only control before building an app |
 
 ## Read this first: where the plan is weak
 

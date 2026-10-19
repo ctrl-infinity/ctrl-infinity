@@ -1,0 +1,6 @@
+# For phone_proof.py in Termux. No FastAPI/uvicorn: pydantic-core rarely builds on a phone.
+# Install cryptography from Termux first (`pkg install python-cryptography`) so pip doesn't try to build it from Rust.
+httpx>=0.27
+aiofiles>=0.8
+protobuf>=4.21
+androidtvremote2>=0.3

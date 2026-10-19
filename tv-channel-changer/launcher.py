@@ -714,7 +714,7 @@ class AtvRemoteStb(StbDriver):
     name = "atv_remote"
     native_power = True
     KEYCODES = {**{str(i): 7 + i for i in range(10)},  # KEYCODE_0..9 = 7..16
-                "ok": 23, "back": 4, "exit": 4, "home": 3, "power": 26, "wakeup": 224, "sleep": 223}
+                "ok": 23, "back": 4, "exit": 4, "home": 3, "power": 26}
 
     def __init__(self, scfg: dict, http: httpx.AsyncClient):
         super().__init__(scfg, http)
@@ -789,22 +789,39 @@ class AtvRemoteStb(StbDriver):
             await asyncio.sleep(0.5)
         return False
 
+    # Measured on the Xstream box: KEYCODE_WAKEUP (224) and KEYCODE_SLEEP (223) are ignored, but a short
+    # KEYCODE_POWER (26) toggles standby in both directions and `is_on` follows within ~2 s. So this is a
+    # toggle: same rule as the IR boxes. Read the state, press ONCE only if it is wrong, verify, and never
+    # retry blind (a second press after a slow first one would undo it).
+    # The box also ignores POWER for a few seconds after a power change (a press ~1 s after a wake did nothing;
+    # one 22 s after worked). 15 s is a conservative guess inside that range; narrow it if it ever matters.
+    POWER_DEAD_TIME_S = 15.0
+    _last_power_change = -1e9
+
+    async def _toggle_power(self, want_on: bool) -> None:
+        wait = self._last_power_change + self.POWER_DEAD_TIME_S - time.monotonic()
+        if wait > 0:
+            await asyncio.sleep(wait)
+        if await self.is_on() == want_on:  # state changed while we waited (e.g. someone used the remote)
+            return
+        await self.press("power")
+        self._last_power_change = time.monotonic()
+        if not await self._wait_on(want_on, 10):
+            raise StbError(f"Xstream box still {'in standby' if want_on else 'on'} after one POWER press; "
+                           "not pressing again blind")
+
     async def ensure_on(self, notify: Callable[[float], None] | None = None) -> bool:
-        if await self.is_on() is not False:  # on, or unknown: never send a wake key blind
+        if await self.is_on() is not False:  # on, or unknown: never toggle blind
             return False
         if notify:
             notify(self.c["boot_s"])
-        await self.press("wakeup")  # discrete: cannot switch the box off
-        if not await self._wait_on(True, 10):
-            raise StbError("Xstream box did not wake via KEYCODE_WAKEUP")
+        await self._toggle_power(True)
         await asyncio.sleep(self.c["boot_s"])
         return True
 
     async def ensure_off(self) -> None:
         if await self.is_on():
-            await self.press("sleep")
-            if not await self._wait_on(False, 10):
-                raise StbError("Xstream box did not sleep via KEYCODE_SLEEP")
+            await self._toggle_power(False)
 
     async def foreground(self) -> str:
         return (await self.connect()).current_app or ""

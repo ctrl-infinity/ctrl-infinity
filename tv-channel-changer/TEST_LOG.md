@@ -26,7 +26,7 @@ Newest findings go at the bottom of each phase. The PSK is deliberately not reco
 | 5 Digit timing | **PASS**: `inter_digit_ms = 150`, 10/10 tunes, menu escape OK |
 | 6 Box power detection | Native on `atv_remote` (`is_on`, wake/sleep keys); wake from real standby untested |
 | 7 TV latency | **PASS** with a caveat: picture takes 9-28 s after the API says ready; `hdmi_settle_s = 25`. The 30-minute cold-standby trial is still to do |
-| 8 Mismatched states | **In progress**: 1 of 5 cases passed; box sleep key has no effect, see Phase 8 |
+| 8 Mismatched states | **PASS** (4 of 5 cases in the full run, case 1 passed on re-run): box power via POWER key, see Phase 8 |
 | 9-10 | Not started |
 
 ## Phase 0: Preparation
@@ -143,22 +143,36 @@ and an `atv_remote` branch in `stb`; its `AdbStb` special cases now use a `nativ
   input switches on a TV that was already on use `hdmi_switch_settle_s` (default 3 s). Re-run `latency --manual`:
   it now asks for the picture after the warm switch too and suggests a value.
 
-## Phase 8: mismatched states (in progress)
+## Phase 8: mismatched states
 
-`diagnose.py mismatch --channel 725`:
-- **TV on / box on: PASS** (30.5 s; job, TV active, HDMI, box on, and eyes all OK).
-- **TV on / box off: not testable yet.** The test's setup step calls `ensure_off()`, which sends `KEYCODE_SLEEP` (223)
-  and waits up to 10 s for `is_on` to become False. It never did, so the run aborted with
-  `StbError: Xstream box did not sleep via KEYCODE_SLEEP` before any tune was attempted.
-- Follow-up probe: sending 223 alone and polling for 15 s left `is_on = True` and the connection up the whole time.
-  What the screen did was not recorded. Open question: does the box ignore the sleep key, or does it sleep while
-  `is_on` fails to track it?
-- Candidate fixes to try: `KEYCODE_SOFT_SLEEP` (276), `KEYCODE_POWER` (26, a toggle, so only safe with a reliable
-  state read), and checking what the box does on the Airtel remote's own power key. Also verify whether the box accepts
-  Remote-protocol connections and a wake key while asleep.
-- The remaining Phase 8 cases (TV on/box off, TV off/box on, TV off/box off, box stuck in a menu) are not run.
-- Side finding (fixed): `diagnose.py mismatch` crashed when it could not force the box's power state. It now warns and
-  asks you to set the box state with the Airtel remote, so the remaining cases can run.
+### Finding: how to put the Xstream box in and out of standby
+
+- `is_on` (from the Remote protocol) **tracks standby reliably**: it flipped to False when the Airtel remote's power
+  button was pressed, and the Remote service **stays reachable while the box sleeps** (connection and port 6466 stayed up).
+- `KEYCODE_SLEEP` (223) and `KEYCODE_WAKEUP` (224) are **ignored** by this box (is_on unchanged for 15-20 s).
+- A short **`KEYCODE_POWER` (26) toggles standby in both directions**: sleep took 1.3-2.4 s, wake 1.0-2.0 s to show in `is_on`.
+- The box **ignores POWER for a few seconds after a power change**: a press about 1 s after a wake did nothing, one 22 s
+  after worked. The driver now waits 15 s since the last power change (a guess inside that range), reads `is_on` first,
+  presses once, verifies, and never retries blind (same rule as the IR boxes). Cycle test on the real box:
+  wake, no-op, sleep, no-op, wake, all as expected.
+- Driver change: `AtvRemoteStb.ensure_on/ensure_off` use POWER with that guard (the 223/224 keys were removed).
+
+### `diagnose.py mismatch --channel 725`
+
+| Case | Result | Time |
+|---|---|---|
+| TV on / box on | first full run: **FAIL** (`job=ok`, but `tv active=NO hdmi=NO eyes=NO`); alone, with raw API output: **PASS** | 3.6 s (fail) / 6.1 s (alone) |
+| TV on / box off | PASS | 40.8 s |
+| TV off / box on | PASS | 27.5 s |
+| TV off / box off | PASS | 38.7 s |
+| Box stuck in a menu | PASS (the Settings escape works end to end) | |
+
+- Case 1 could not be reproduced: alone, power was `active` and the input was HDMI 1 right after the job and 3 s later.
+  Possible cause (unproven): earlier in the session the box was put to sleep while the TV sat on HDMI 1, and the TV may
+  have gone to standby on its own (no-signal timeout) before that run. Logged as edge case #13; re-run the full mismatch
+  once more to see if it recurs.
+- The first mismatch attempt had crashed in setup when the box could not be forced to sleep (since fixed by the POWER
+  approach above; the harness also now falls back to asking for the Airtel remote instead of crashing).
 
 ## Cold start via the real job (TV in standby for hours, box left on a Settings screen)
 
@@ -193,8 +207,8 @@ Things seen or suspected during testing that are not blocking the happy path. St
 | 1 | Box left on a Settings screen; Airtel launch request is ignored | fixed (partly verified) | Home, then launch. Re-test the full `goto_live` from Settings |
 | 2 | Airtel app cold-starts after launch (loading screen seen); foreground flips to `com.airtel.tv` immediately but the UI may still be loading | open | `live_settle_s = 3` may be too short; digits could land on the loading screen. Measure the load time, then tune `live_settle_s` |
 | 3 | Fresh connection reports no foreground app for the first moments | fixed | `goto_live` waits up to 4 s |
-| 4 | Box ignores `KEYCODE_SLEEP` (223); `is_on` never changes | open | Blocks Phase 8 box-off cases. Try 276 (SOFT_SLEEP) and 26 (POWER); watch the screen |
-| 5 | Does the box accept connections and a wake key while truly asleep? | open | Untested; matters for `ensure_on` |
+| 4 | Box ignores `KEYCODE_SLEEP` (223) and `KEYCODE_WAKEUP` (224) | fixed | Use `KEYCODE_POWER` (26) as a verified toggle; see Phase 8 |
+| 5 | Does the box accept connections and a wake key while asleep? | fixed | Yes: the Remote service stays up in standby and POWER wakes it in about 1-2 s |
 | 6 | TV wakes onto whatever screen it was last on (once a Developer options screen) before the HDMI switch | watch | Harmless if `setPlayContent` always follows; seen once |
 | 7 | Launch request makes the box send an "error from the device" log line even when the launch works | watch | Cosmetic; consider silencing the library logger |
 | 8 | Menu escape only tested for the Airtel settings screen | open | Guide, search box and deeper menus untested |
@@ -202,6 +216,8 @@ Things seen or suspected during testing that are not blocking the happy path. St
 | 10 | Job takes up to the full TV cold settle (25 s) to report failure even when the box failed at about 16 s | watch | Consider failing fast, or showing the box error sooner |
 | 11 | HDMI 2 is labelled "TV box" and shows connected; unknown device | watch | Not used; confirm what it is |
 | 12 | Cold-start picture time after a long standby | open | Planned 30-minute trial (`latency --trials 1 --cool 1800 --manual`) |
+| 13 | Mismatch case 1 (TV on / box on) failed once in the full run, passed alone | watch | Possible TV no-signal auto-standby after the box was asleep; re-run the full mismatch to see if it recurs |
+| 14 | Box ignores POWER for a few seconds after a power change | watch | Driver waits 15 s between power changes; the real window is between 1 s and 22 s and could be narrowed |
 
 **Still to do**
 1. Phase 7 cold trial (`--cool 1800`, planned for the next morning), finish Phase 8, Phase 9 server/tablet/buttons, Phase 10 real-world tests.

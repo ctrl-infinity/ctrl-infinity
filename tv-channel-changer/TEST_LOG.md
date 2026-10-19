@@ -27,7 +27,7 @@ Newest findings go at the bottom of each phase. The PSK is deliberately not reco
 | 6 Box power detection | Native on `atv_remote` (`is_on`, wake/sleep keys); wake from real standby untested |
 | 7 TV latency | **PASS** with a caveat: picture takes 9-28 s after the API says ready; `hdmi_settle_s = 25`. The 30-minute cold-standby trial is still to do |
 | 8 Mismatched states | **PASS** (4 of 5 cases in the full run, case 1 passed on re-run): box power via POWER key, see Phase 8 |
-| 9 Server, tablet, buttons | **PASS on the laptop** (server, HTTP tunes, off, rapid taps, UI, buttons, down screen); Pi/systemd, real tablet and real buttons untested |
+| 9 Server, tablet, buttons | **PASS** on the laptop plus a real phone over Wi-Fi (cards, off, tunes, haptics, down screen, recovery); Pi/systemd and a real Shelly button untested |
 | 10 Real-world tests | Not started |
 
 ## Phase 0: Preparation
@@ -226,6 +226,31 @@ reply in this state but the REST API still answers, so network wake works).
 **Not tested here:** the Raspberry Pi install (systemd unit, boot without login, copying `config.toml` and the two pem
 files), the real tablet in Fully Kiosk Browser (wake lock, vibration), a real Shelly button, and unplugging the Pi.
 
+### Phase 9 on a real phone (page served from the laptop at its LAN address)
+
+| Check | Result |
+|---|---|
+| Layout | Buttons visible |
+| "TV बंद" | Worked |
+| 723 from TV standby | Worked; the picture was up with the countdown still reading about 20, so the 25 s settle kept counting for a long time after the picture (TV had only been off briefly) |
+| 725 while the TV is on | Switched correctly |
+| Same card tapped twice | Haptic on the first tap only (the second tap joins the running job, so expected) |
+| Haptics and screen stays awake | Both work |
+
+- **Bug found and fixed: no request timeout in the page.** With the server stopped, tapping a card left the overlay on "723 ..."
+  indefinitely. `req()` called `fetch()` with no deadline, so a vanished server (silent packet drop) makes taps hang and keeps
+  the heartbeat from ever failing, which is what shows the "server down" screen. Every request now has a deadline (6 s, heartbeat
+  3 s). With the fix: a tap while the server is down fails clearly after about 2 s and the red "server down" screen appears
+  about 4-5 s after that. The 2 s result means the laptop refused the connection, so the new 6 s timeout itself was not exercised;
+  that needs a Pi that is actually unplugged.
+- **Bug found and fixed: first tap after a server restart failed.** The browser's first request went down a dead keep-alive
+  connection and failed, so the first tap needed a second one. `start()` now retries once after 400 ms (tune and off are
+  idempotent). Re-test: one tap worked.
+- The recovery from the red screen needs no reload.
+
+**Not tested:** the Raspberry Pi (systemd unit, boot without login, unplug and replug), a real Shelly button (only curl against
+the webhook), Fully Kiosk Browser specifically, and a true silent-drop network failure.
+
 ## Edge cases register (revisit later)
 
 Things seen or suspected during testing that are not blocking the happy path. Status: **fixed**, **open**, or **watch**.
@@ -252,6 +277,8 @@ Things seen or suspected during testing that are not blocking the happy path. St
 | 18 | Placeholder help-line phone number and placeholder card names (channel numbers) | open | Fill in the real number and channel names |
 | 19 | `hdmi_settle_s = 25` was longer than the picture needed on one cold wake (picture at about 21 s, job end 30.7 s) | watch | Wait for the 30-minute cold trial and more samples before shortening |
 | 20 | Pi / systemd, real tablet in Fully Kiosk, real Shelly button, unplugging the Pi | open | Phase 9 on real hardware |
+| 21 | Picture appears quickly after a short standby (countdown still near 20) but the fixed 25 s cold settle keeps counting | open | Adaptive settle idea: scale `hdmi_settle_s` by how long the TV was in standby |
+| 22 | Page request timeout never exercised against a silently dropped network | open | Needs the Pi unplug test |
 
 **Still to do**
 1. Phase 7 cold trial (`--cool 1800`, planned for the next morning), finish Phase 8, Phase 9 server/tablet/buttons, Phase 10 real-world tests.

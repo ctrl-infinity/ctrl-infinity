@@ -1323,10 +1323,18 @@ const $ = id => document.getElementById(id);
 let following = null, base = 0, eta = 0, tick = null, poll = null, fails = 0, hideT = null;
 
 function buzz(p) { try { navigator.vibrate && navigator.vibrate(p || 60); } catch (e) {} }
-async function req(path, method) {
-  const r = await fetch(path, { method: method || 'GET', cache: 'no-store' });
-  if (!r.ok) throw new Error(r.status + ' ' + (await r.text()));
-  return r.json();
+// Every request needs a deadline. When the server's machine is off or unplugged the network drops
+// the packets silently instead of refusing, and a bare fetch() then waits for minutes: taps would
+// hang on the dots and the "server down" screen (which relies on failed heartbeats) would never show.
+async function req(path, method, ms) {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms || 6000);
+  try {
+    const r = await fetch(path, { method: method || 'GET', cache: 'no-store', signal: ac.signal });
+    if (!r.ok) throw new Error(r.status + ' ' + (await r.text()));
+    return await r.json();
+  } catch (e) {
+    throw e.name === 'AbortError' ? new Error('no answer from the server') : e;
+  } finally { clearTimeout(t); }
 }
 function colorFor(job) {
   if (job.target === 'off') return '#263238';
@@ -1363,7 +1371,14 @@ function hide() { $('ov').className = ''; following = null; clearInterval(tick);
 async function start(path, title, color) {
   if (following) return;          // one thing at a time; the overlay covers the cards anyway
   buzz(); following = 'pending'; show(title, color);
-  try { follow(await req(path, 'POST')); } catch (e) { fail(e.message); }
+  try { follow(await req(path, 'POST')); }
+  catch (e) {
+    // After a server restart the browser's first request can go down a dead keep-alive socket and
+    // fail (measured on a phone: the first tap failed, the second worked). Tune and off are safe to
+    // repeat (the same target just joins the running job), so retry once before showing a failure.
+    await new Promise(r => setTimeout(r, 400));
+    try { follow(await req(path, 'POST')); } catch (e2) { fail(e2.message); }
+  }
 }
 function follow(job) {
   following = job.id; fails = 0;
@@ -1418,7 +1433,7 @@ async function vol(dir) { buzz(30); try { await req('/api/volume/' + dir, 'POST'
 let downCount = 0;
 async function heartbeat() {
   try {
-    const j = await req('/api/current'); downCount = 0; $('down').className = '';
+    const j = await req('/api/current', 'GET', 3000); downCount = 0; $('down').className = '';
     if (!following && j.id && j.state === 'running') { show(j.label, colorFor(j)); follow(j); }
   } catch (e) { if (++downCount >= 3) $('down').className = 'show'; }
   setTimeout(heartbeat, 3000);

@@ -4,8 +4,8 @@
 the Sony TV, switch to the Airtel box's HDMI port, wake the box, bring up Airtel live TV and type
 the channel number. There's no server, no Pi and no laptop.
 
-**Status:** planned, not started. **Gate 0** (the phone-only proof, [PHONE_PROOF.md](PHONE_PROOF.md))
-comes first. Don't set up Android Studio until P1–P5 there pass.
+**Status:** planned, not started. M0 is the go/no-go: it tests the riskiest part (the box protocol on a
+real phone) before anything else is built.
 
 **Scope:** our household only (Nani's phone, and optionally the caretaker's). Distribution to
 other families comes later and is out of scope here.
@@ -124,8 +124,7 @@ All of these were measured on the real Sony KD-49X8000H and Airtel Xstream box (
 
 | # | Deliverable | Exit test | Estimate |
 |---|---|---|---|
-| **Gate 0** | Phone-only proof in Termux ([PHONE_PROOF.md](PHONE_PROOF.md)) | P1–P5 pass with the laptop shut down | 1 evening |
-| **M0 spike** | Bare app: pair with the box, send 7-2-3 | Box lands on 723; pairing survives an app restart. **Not working within a week → switch to the Chaquopy route** (reuse the Python inside the app) | 2–5 days |
+| **M0 spike** | Bare app: pair with the box, send 7-2-3 On Nani's actual phone with the laptop off: the app reaches the TV and box on Wi-Fi, the box lands on 723, and pairing survives an app restart. **Not working within a week → switch to the Chaquopy route** (reuse the Python inside the app) | 2–5 days |
 | M1 | Bravia client + state machine + debug screen | The 4 TV/box power cases from Phase 8 pass from the phone, laptop off | ~1 week |
 | M2 | Nani's UI + settings screen | The Phase 9 phone checklist passes with no laptop | ~1 week |
 | M3 | Hardening: Wi-Fi screen, log export, signed APK on both phones | One week of daily use + the remaining Phase 10 tests (morning cold start, power cut, router reboot, watching Nani) | ~1 week |
@@ -143,7 +142,7 @@ uninstalled and paired again.
 | Risk | Mitigation |
 |---|---|
 | Box protocol port has a subtle bug (pairing hash, framing, ping) | M0 tests it alone first; the Python library is the reference; fall back to Chaquopy |
-| Newer Android versions restrict local-network access for new apps (Termux may be exempt, so Gate 0 can be optimistic) | Check on the real phones during M0 |
+| Newer Android versions restrict local-network access for new apps | M0's exit test runs on the real phones, so this shows up in week one |
 | Android routes traffic over mobile data when Wi-Fi "has no internet" | Bind connections to the Wi-Fi network; show the Wi-Fi screen otherwise |
 | Two phones tapping at the same moment interleave digits | Rare at home; accept for v0.1 |
 | Pairing lost after a box reset or firmware update (#9) | Settings shows "pair again"; IR blaster remains the documented fallback |

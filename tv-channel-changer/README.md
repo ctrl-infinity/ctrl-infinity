@@ -20,6 +20,7 @@ Nothing needs the internet.
 | `tvlauncher.service` | systemd unit (expects this folder copied to `/opt/tvlauncher`) |
 | `TESTING.md` | Step-by-step test plan for the real TV, box and tablet |
 | `phone_proof.py` + `PHONE_PROOF.md` | Runs the launcher on the phone itself (Termux, no FastAPI) to prove phone-only control before building an app |
+| `PLAN_ANDROID.md` | Plan for the Android app that replaces the laptop (scope, architecture, behaviours to port, milestones) |
 
 ## Read this first: where the plan is weak
 

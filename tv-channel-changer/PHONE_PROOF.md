@@ -82,7 +82,8 @@ Allow about an hour for setup and an evening of use.
   as slightly optimistic on that one point.
 
 **Decision rule:**
-- **P1–P5 pass:** the Android app is a port of proven behaviour, not research. Start M0.
+- **P1–P5 pass:** the Android app is a port of proven behaviour, not research. Start M0 of
+  [PLAN_ANDROID.md](PLAN_ANDROID.md).
 - **P1 or P2 fails:** stop and investigate. Something specific to Android networking or the box
   pairing would block the app too.
 - **P6 or P7 fails:** this only rules out "phone as a 24/7 server". The planned app doesn't need
